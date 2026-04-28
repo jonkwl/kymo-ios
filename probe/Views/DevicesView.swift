@@ -46,7 +46,9 @@ struct DevicesView: View {
             .navigationTitle("Devices")
             .padding(.vertical, 16)
             .onAppear {
-                handleAppearance()
+                if bleManager.isBluetoothPoweredOn && bleManager.connectedDeviceId == nil {
+                    bleManager.startScanning()
+                }
             }
             .onDisappear {
                 bleManager.stopScanning()
@@ -182,12 +184,6 @@ struct DevicesView: View {
                     .padding(.vertical, 4)
                 }
             }
-        }
-    }
-    
-    private func handleAppearance() {
-        if bleManager.isBluetoothPoweredOn && bleManager.connectedDeviceId == nil {
-            bleManager.startScanning()
         }
     }
 }
