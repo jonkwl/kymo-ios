@@ -29,6 +29,13 @@ class BluetoothManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, Pola
             UserDefaults.standard.set(savedDevices, forKey: "SavedPolarSensors")
         }
     }
+
+    var lastConnectedDeviceId: String? {
+        get { UserDefaults.standard.string(forKey: "LastConnectedDeviceId") }
+        set { UserDefaults.standard.set(newValue, forKey: "LastConnectedDeviceId") }
+    }
+
+    private var hasAttemptedInitialConnect = false
     
     var isConnected: Bool {
         return connectedDeviceId != nil
@@ -118,7 +125,13 @@ class BluetoothManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, Pola
     
     func blePowerOn() {
         isBluetoothPoweredOn = true
-        connectionState = "Ready to scan"
+        
+        if !hasAttemptedInitialConnect, let lastId = lastConnectedDeviceId, let name = savedDevices[lastId] {
+            hasAttemptedInitialConnect = true
+            connectToDevice(id: lastId, name: name)
+        } else {
+            connectionState = "Ready"
+        }
     }
     
     func blePowerOff() {
@@ -135,6 +148,7 @@ class BluetoothManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, Pola
     func deviceConnected(_ polarDeviceInfo: PolarDeviceInfo) {
         isConnecting = false
         connectedDeviceId = polarDeviceInfo.deviceId
+        lastConnectedDeviceId = polarDeviceInfo.deviceId
         connectionState = "Connected: \(polarDeviceInfo.name)"
         discoveredDevices.removeAll()
     }
