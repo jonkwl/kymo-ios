@@ -27,6 +27,9 @@ struct CaptureView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .toolbar(sessionManager.state == .idle ? .visible : .hidden, for: .tabBar)
+            .toolbarBackground(Color(.systemGroupedBackground), for: .tabBar)
+            .toolbarBackground(.visible, for: .tabBar)
             .animation(.snappy(duration: 0.3), value: sessionManager.state)
         }
     }
@@ -94,8 +97,8 @@ struct CaptureView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "heart.fill")
                         .foregroundColor(.red)
-                        .scaleEffect(isBeating ? 1.1 : 1.0)
-                        .animation(.spring(duration: 0.25, bounce: 0.6).repeatForever(autoreverses: true), value: isBeating)
+                        .scaleEffect(isBeating ? 1.3 : 1.0)
+                        .animation(.spring(duration: 0.8, bounce: 0.7).repeatForever(autoreverses: true), value: isBeating)
                     
                     Text("LIVE BPM")
                         .font(.caption.weight(.bold))
