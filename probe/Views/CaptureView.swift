@@ -1,12 +1,12 @@
 import SwiftUI
 
 struct CaptureView: View {
-    @Environment(BluetoothManager.self) private var bleManager
+    @Environment(SensorManager.self) private var sensorManager
     @Environment(SessionManager.self) private var sessionManager
     
     @Binding var selectedTab: Int
     
-    @State private var isBeating = false
+    @State private var activePage = 0
 
     var body: some View {
         NavigationStack {
@@ -49,7 +49,7 @@ struct CaptureView: View {
             Spacer()
             
             // Sensor battery
-            if sessionManager.state == .idle, let batteryLevel = bleManager.sensorBatteryLevel {
+            if sessionManager.state == .idle, let batteryLevel = sensorManager.sensorBatteryLevel {
                 SensorBatteryBadge(batteryLevel: batteryLevel, showSensorIcon: true)
                     .transition(.scale.combined(with: .opacity))
             }
@@ -69,9 +69,9 @@ struct CaptureView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(bleManager.isConnected ? AnyShapeStyle(Color.green.gradient) : AnyShapeStyle(Color.gray.opacity(0.1)))
+                        .fill(sensorManager.isConnected ? AnyShapeStyle(Color.green.gradient) : AnyShapeStyle(Color.gray.opacity(0.1)))
                         .frame(width: 230, height: 230)
-                        .shadow(color: bleManager.isConnected ? Color.green.opacity(0.3) : .clear, radius: 24, x: 0, y: 12)
+                        .shadow(color: sensorManager.isConnected ? Color.green.opacity(0.3) : .clear, radius: 24, x: 0, y: 12)
                     
                     VStack(spacing: 12) {
                         Image(systemName: "figure.run")
@@ -80,16 +80,16 @@ struct CaptureView: View {
                             .font(.title2.weight(.bold))
                             .tracking(2)
                     }
-                    .foregroundColor(bleManager.isConnected ? .white : .secondary)
+                    .foregroundColor(sensorManager.isConnected ? .white : .secondary)
                 }
             }
-            .disabled(!bleManager.isConnected)
+            .disabled(!sensorManager.isConnected)
             .clickyButton(weight: .medium, cornerRadius: 115)
-            .scaleEffect(bleManager.isConnected ? 1.0 : 0.95)
-            .animation(.snappy(duration: 0.35, extraBounce: 0.1), value: bleManager.isConnected)
+            .scaleEffect(sensorManager.isConnected ? 1.0 : 0.95)
+            .animation(.snappy(duration: 0.35, extraBounce: 0.1), value: sensorManager.isConnected)
             
             VStack(spacing: 12) {
-                Text("\(bleManager.currentBpm)")
+                Text("\(sensorManager.currentBpm)")
                     .font(.system(size: 72, weight: .bold, design: .rounded))
                     .foregroundColor(.primary)
                     .monospacedDigit()
@@ -97,8 +97,6 @@ struct CaptureView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "heart.fill")
                         .foregroundColor(.red)
-                        .scaleEffect(isBeating ? 1.3 : 1.0)
-                        .animation(.spring(duration: 0.8, bounce: 0.7).repeatForever(autoreverses: true), value: isBeating)
                     
                     Text("LIVE BPM")
                         .font(.caption.weight(.bold))
@@ -106,47 +104,51 @@ struct CaptureView: View {
                         .foregroundColor(.secondary)
                 }
             }
-            .opacity(bleManager.isConnected ? 1 : 0)
-            .offset(y: bleManager.isConnected ? 0 : 20)
-            .animation(.spring(response: 0.4, dampingFraction: 0.7, blendDuration: 0), value: bleManager.isConnected)
+            .opacity(sensorManager.isConnected ? 1 : 0)
+            .offset(y: sensorManager.isConnected ? 0 : 20)
+            .animation(.spring(response: 0.4, dampingFraction: 0.7, blendDuration: 0), value: sensorManager.isConnected)
             .onAppear {
-                isBeating = true
-                sessionManager.bleManager = bleManager
-            }
-            .onDisappear {
-                isBeating = false
+                sessionManager.sensorManagerRef = sensorManager
             }
             
             Spacer()
             
-            if !bleManager.isConnected {
+            if !sensorManager.isConnected {
                 Button {
                     selectedTab = 2
                 } label: {
                     HStack(spacing: 16) {
                         ZStack {
                             Circle()
-                                .fill(bleManager.isConnecting ? Color.blue.opacity(0.1) : Color.red.opacity(0.1))
+                                .fill(sensorManager.isConnecting ? Color.blue.opacity(0.1) : Color.red.opacity(0.1))
                                 .frame(width: 50, height: 50)
                             
-                            Image(systemName: bleManager.isConnecting ? "arrow.triangle.2.circlepath" : "sensor.tag.radiowaves.forward.fill")
-                                .foregroundColor(bleManager.isConnecting ? .blue : .red)
+                            Image(systemName: sensorManager.isConnecting ? "arrow.triangle.2.circlepath" : "sensor.tag.radiowaves.forward.fill")
+                                .foregroundColor(sensorManager.isConnecting ? .blue : .red)
                                 .font(.system(size: 22, weight: .semibold))
                         }
                         
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(bleManager.isConnecting ? "Connecting..." : (bleManager.isBluetoothPoweredOn ? "No Sensor" : "Bluetooth Off"))
+                            Text(sensorManager.isConnecting ? "Connecting..." : (sensorManager.isBluetoothPoweredOn ? "No Sensor" : "Bluetooth Off"))
                                 .font(.headline)
                                 .foregroundColor(.primary)
                             
-                            Text(bleManager.isConnecting ? "Finding your last device" : "Tap to manage devices")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                            if sensorManager.isConnecting {
+                                if !sensorManager.hasAttemptedInitialConnect {
+                                    Text("Finding your last device")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            } else {
+                                Text("Tap to manage devices")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                         
                         Spacer()
                         
-                        if bleManager.isConnecting {
+                        if sensorManager.isConnecting {
                             ProgressView()
                                 .tint(.blue)
                         } else {
@@ -171,12 +173,23 @@ struct CaptureView: View {
     // MARK: Active Interface
     private var activeInterface: some View {
         VStack(spacing: 0) {
-            TabView {
+            TabView(selection: $activePage) {
                 mainMetricsPage
-                ekgPlaceholderPage
+                    .tag(0)
+                ecgPage
+                    .tag(1)
             }
             .tabViewStyle(.page)
             .indexViewStyle(.page(backgroundDisplayMode: .always))
+            .onChange(of: activePage) { _, newValue in
+                if newValue == 1 {
+                if sensorManager.isEcgAvailable {
+                        sensorManager.startEcgStreaming()
+                    }
+                } else {
+                    sensorManager.stopEcgStreaming()
+                }
+            }
             
             activeControls
                 .padding(.top, 16)
@@ -271,7 +284,7 @@ struct CaptureView: View {
             }
             
             HStack(spacing: 16) {
-                metricCard(title: "LIVE BPM", value: "\(bleManager.currentBpm)", icon: "heart.fill", iconColor: .red)
+                metricCard(title: "LIVE BPM", value: "\(sensorManager.currentBpm)", icon: "heart.fill", iconColor: .red)
                 metricCard(title: "LAPS", value: "\(sessionManager.laps.count)", icon: "flag.fill", iconColor: .blue)
             }
         }
@@ -302,25 +315,49 @@ struct CaptureView: View {
         .shadow(color: .black.opacity(0.03), radius: 8, x: 0, y: 4)
     }
     
-    private var ekgPlaceholderPage: some View {
-        VStack {
-            Text("EKG STREAM")
-                .font(.subheadline.weight(.bold))
-                .foregroundColor(.secondary)
-                .tracking(1.5)
+    private var ecgPage: some View {
+        VStack(spacing: 20) {
+            HStack {
+                Image(systemName: "bolt.horizontal.fill")
+                    .foregroundColor(.blue.opacity(0.6))
+
+                Text("ECG View")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(.secondary)
+                    .tracking(1.5)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay(
-                    Text("Real-time EKG Visualization")
-                        .font(.subheadline)
-                        .foregroundStyle(.tertiary)
-                )
-                .shadow(color: .black.opacity(0.03), radius: 8, x: 0, y: 4)
+            ZStack {
+                EcgGridView()
+                    .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                
+                if sensorManager.isEcgAvailable {
+                    EcgGraphView(samples: sensorManager.ecgSamples)
+                        .padding(.vertical, 30)
+                } else {
+                    ContentUnavailableView(
+                        "ECG Unavailable",
+                        systemImage: "waveform.path.ecg.dotted",
+                        description: Text("Connecting to sensor...")
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            
+            HStack {
+                Image(systemName: "heart.fill")
+                    .foregroundColor(.red)
+                
+                Text("\(sensorManager.currentBpm) BPM")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(.gray)
+                    .tracking(0.5)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal)
-        .padding(.bottom, 56)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, 50)
+        .frame(maxHeight: .infinity)
     }
 }

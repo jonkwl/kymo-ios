@@ -19,9 +19,3 @@ struct ContentView: View {
         .tint(.blue)
     }
 }
-
-#Preview {
-    ContentView()
-        .environment(BluetoothManager())
-        .preferredColorScheme(.dark)
-}

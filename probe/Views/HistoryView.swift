@@ -80,27 +80,28 @@ struct HistoryView: View {
                     }
                 }
                 
-                HStack(spacing: 12) {
-                    metricPill(icon: "timer", text: activity.duration, color: .blue)
-                    metricPill(icon: "heart.fill", text: "\(activity.avgBpm) BPM", color: .red)
-                    metricPill(icon: "chart.bar.fill", text: "RPE \(activity.rpe)", color: .orange)
+                HStack(spacing: 8) {
+                    metricPill(icon: "timer", text: activity.duration)
+                    metricPill(icon: "heart.fill", text: "\(activity.avgBpm) BPM")
+                    metricPill(icon: "chart.bar.fill", text: "RPE \(activity.rpe)")
                 }
             }
             .padding(.vertical, 6)
         }
     }
     
-    private func metricPill(icon: String, text: String, color: Color) -> some View {
+    private func metricPill(icon: String, text: String) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
             Text(text)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
         }
-        .foregroundColor(color)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(color.opacity(0.15))
+        .background(Color(.tertiarySystemFill))
         .clipShape(Capsule())
     }
 }
