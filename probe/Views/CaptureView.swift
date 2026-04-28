@@ -1,29 +1,5 @@
 import SwiftUI
 
-struct ClickyButtonStyle: ButtonStyle {
-    let hapticWeight: UIImpactFeedbackGenerator.FeedbackStyle
-    let cornerRadius: CGFloat
-    let isClicky: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .scaleEffect(isClicky && configuration.isPressed ? 0.94 : 1.0)
-            .animation(.interactiveSpring(response: 0.15, dampingFraction: 0.6, blendDuration: 0), value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { oldValue, newValue in
-                if newValue {
-                    UIImpactFeedbackGenerator(style: hapticWeight).impactOccurred()
-                }
-            }
-    }
-}
-
-extension View {
-    func clickyButton(weight: UIImpactFeedbackGenerator.FeedbackStyle = .light, cornerRadius: CGFloat = 18, isClicky: Bool = true) -> some View {
-        self.buttonStyle(ClickyButtonStyle(hapticWeight: weight, cornerRadius: cornerRadius, isClicky: isClicky))
-    }
-}
-
 struct CaptureView: View {
     @Environment(BluetoothManager.self) private var bleManager
     @Environment(SessionManager.self) private var sessionManager
@@ -70,20 +46,9 @@ struct CaptureView: View {
             Spacer()
             
             // Sensor battery
-            if bleManager.isConnected && sessionManager.state == .idle {
-                HStack(spacing: 6) {
-                    Image(systemName: "sensor.tag.radiowaves.forward")
-                        .font(.system(size: 10, weight: .bold))
-                    Text("85%")
-                        .font(.system(.caption, design: .rounded, weight: .bold))
-                    Image(systemName: "battery.75")
-                }
-                .foregroundColor(.green)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.green.opacity(0.15))
-                .clipShape(Capsule())
-                .transition(.scale.combined(with: .opacity))
+            if sessionManager.state == .idle, let batteryLevel = bleManager.sensorBatteryLevel {
+                SensorBatteryBadge(batteryLevel: batteryLevel, showSensorIcon: true)
+                    .transition(.scale.combined(with: .opacity))
             }
         }
         .padding(.horizontal)
@@ -241,7 +206,7 @@ struct CaptureView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             
-            HStack(spacing: 24) {
+            HStack(spacing: 14) {
                 // STOP
                 if sessionManager.state == .paused {
                     controlCircle(title: "STOP", icon: "stop.fill", bgColor: .red, fgColor: .white) {
