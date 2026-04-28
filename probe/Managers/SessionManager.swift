@@ -1,5 +1,6 @@
-import Foundation
 import Observation
+import ActivityKit
+import Foundation
 import Combine
 
 @Observable
@@ -14,10 +15,13 @@ class SessionManager {
     var state: SessionState = .idle
     var elapsedTime: TimeInterval = 0
     var laps: [TimeInterval] = []
+    var bleManager: BluetoothManager?
     
     private var timer: AnyCancellable?
     private var startTime: Date?
     private var accumulatedTime: TimeInterval = 0
+    
+    private var activity: Activity<SessionAttributes>?
     
     // MARK: Formatting
     var timeString: String {
@@ -32,6 +36,16 @@ class SessionManager {
         guard state == .idle else { return }
         state = .recording
         startTime = Date()
+        
+        let attributes = SessionAttributes(sessionName: "Session")
+        let initialState = SessionAttributes.ContentState(currentBpm: 0, elapsedTime: 0)
+        
+        do {
+            activity = try Activity.request(attributes: attributes, content: .init(state: initialState, staleDate: nil))
+        } catch {
+            print("Error starting Live Activity: \(error.localizedDescription)")
+        }
+        
         runTimer()
     }
     
@@ -56,6 +70,10 @@ class SessionManager {
         accumulatedTime = 0
         elapsedTime = 0
         laps.removeAll()
+        
+        Task {
+            await activity?.end(nil, dismissalPolicy: .immediate)
+        }
     }
     
     func addLap() {
@@ -67,7 +85,21 @@ class SessionManager {
             .autoconnect()
             .sink { [weak self] _ in
                 guard let self = self, let start = self.startTime else { return }
+                
                 self.elapsedTime = self.accumulatedTime + Date().timeIntervalSince(start)
+                
+                let currentBpm = self.bleManager?.currentBpm ?? 0
+                
+                let newState = SessionAttributes.ContentState(
+                    currentBpm: currentBpm,
+                    elapsedTime: self.elapsedTime
+                )
+
+                let content = ActivityContent(state: newState, staleDate: nil)
+                
+                Task {
+                    await self.activity?.update(content)
+                }
             }
     }
 }

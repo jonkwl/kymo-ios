@@ -111,6 +111,7 @@ struct CaptureView: View {
             .animation(.spring(response: 0.4, dampingFraction: 0.7, blendDuration: 0), value: bleManager.isConnected)
             .onAppear {
                 isBeating = true
+                sessionManager.bleManager = bleManager
             }
             .onDisappear {
                 isBeating = false
