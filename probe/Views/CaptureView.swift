@@ -1,113 +1,207 @@
 import SwiftUI
 
+struct ClickyButtonStyle: ButtonStyle {
+    let hapticWeight: UIImpactFeedbackGenerator.FeedbackStyle
+    let cornerRadius: CGFloat
+    let isClicky: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .scaleEffect(isClicky && configuration.isPressed ? 0.94 : 1.0)
+            .animation(.interactiveSpring(response: 0.15, dampingFraction: 0.6, blendDuration: 0), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { oldValue, newValue in
+                if newValue {
+                    UIImpactFeedbackGenerator(style: hapticWeight).impactOccurred()
+                }
+            }
+    }
+}
+
+extension View {
+    func clickyButton(weight: UIImpactFeedbackGenerator.FeedbackStyle = .light, cornerRadius: CGFloat = 18, isClicky: Bool = true) -> some View {
+        self.buttonStyle(ClickyButtonStyle(hapticWeight: weight, cornerRadius: cornerRadius, isClicky: isClicky))
+    }
+}
+
 struct CaptureView: View {
     @Environment(BluetoothManager.self) private var bleManager
     @Environment(SessionManager.self) private var sessionManager
     
     @Binding var selectedTab: Int
     
+    @State private var isBeating = false
+
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color(.systemBackground).ignoresSafeArea()
+            ZStack(alignment: .top) {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea()
                 
-                if sessionManager.state == .idle {
-                    idleInterface
-                } else {
-                    activeInterface
+                VStack(spacing: 0) {
+                    customTopBar
+                    
+                    if sessionManager.state == .idle {
+                        idleInterface
+                            .transition(.opacity)
+                    } else {
+                        activeInterface
+                            .transition(.opacity)
+                    }
                 }
             }
-            .navigationTitle("Capture")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
+            .animation(.snappy(duration: 0.3), value: sessionManager.state)
         }
+    }
+    
+    // MARK: Top Bar
+    private var customTopBar: some View {
+        HStack {
+            HStack(spacing: 6) {
+                Image(systemName: "waveform.path.ecg")
+                    .foregroundColor(.blue)
+                    .font(.system(size: 22, weight: .bold))
+                Text("ProCapture")
+                    .font(.system(.title3, design: .rounded).weight(.heavy))
+                    .tracking(0.5)
+            }
+            
+            Spacer()
+            
+            // Sensor battery
+            if bleManager.isConnected && sessionManager.state == .idle {
+                HStack(spacing: 6) {
+                    Image(systemName: "sensor.tag.radiowaves.forward")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("85%")
+                        .font(.system(.caption, design: .rounded, weight: .bold))
+                    Image(systemName: "battery.75")
+                }
+                .foregroundColor(.green)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.green.opacity(0.15))
+                .clipShape(Capsule())
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 16)
     }
     
     // MARK: Idle Interface
     private var idleInterface: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: 40) {
             Spacer()
             
-            // Record button
             Button {
                 sessionManager.startSession()
             } label: {
                 ZStack {
                     Circle()
-                        .fill(bleManager.isConnected ? Color.red : Color.gray.opacity(0.3))
-                        .frame(width: 200, height: 200)
+                        .fill(bleManager.isConnected ? AnyShapeStyle(Color.green.gradient) : AnyShapeStyle(Color.gray.opacity(0.1)))
+                        .frame(width: 230, height: 230)
+                        .shadow(color: bleManager.isConnected ? Color.green.opacity(0.3) : .clear, radius: 24, x: 0, y: 12)
                     
-                    VStack(spacing: 8) {
-                        Image(systemName: "record.circle")
-                            .font(.system(size: 60))
+                    VStack(spacing: 12) {
+                        Image(systemName: "figure.run")
+                            .font(.system(size: 60, weight: .medium))
                         Text("START")
-                            .font(.headline.bold())
+                            .font(.title2.weight(.bold))
+                            .tracking(2)
                     }
                     .foregroundColor(bleManager.isConnected ? .white : .secondary)
                 }
             }
             .disabled(!bleManager.isConnected)
+            .clickyButton(weight: .medium, cornerRadius: 115)
+            .scaleEffect(bleManager.isConnected ? 1.0 : 0.95)
+            .animation(.snappy(duration: 0.35, extraBounce: 0.1), value: bleManager.isConnected)
             
-            // BPM indicator when connected but idle
-            if bleManager.isConnected {
-                VStack(spacing: 4) {
-                    Text("\(bleManager.currentBpm)")
-                        .font(.system(size: 44, weight: .bold, design: .rounded))
-                        .foregroundColor(.green)
+            VStack(spacing: 12) {
+                Text("\(bleManager.currentBpm)")
+                    .font(.system(size: 72, weight: .bold, design: .rounded))
+                    .foregroundColor(.primary)
+                    .monospacedDigit()
+                
+                HStack(spacing: 6) {
+                    Image(systemName: "heart.fill")
+                        .foregroundColor(.red)
+                        .scaleEffect(isBeating ? 1.1 : 1.0)
+                        .animation(.spring(duration: 0.25, bounce: 0.6).repeatForever(autoreverses: true), value: isBeating)
+                    
                     Text("LIVE BPM")
-                        .font(.caption2.bold())
+                        .font(.caption.weight(.bold))
+                        .tracking(1.5)
                         .foregroundColor(.secondary)
                 }
-                .transition(.scale.combined(with: .opacity))
+            }
+            .opacity(bleManager.isConnected ? 1 : 0)
+            .offset(y: bleManager.isConnected ? 0 : 20)
+            .animation(.spring(response: 0.4, dampingFraction: 0.7, blendDuration: 0), value: bleManager.isConnected)
+            .onAppear {
+                isBeating = true
+            }
+            .onDisappear {
+                isBeating = false
             }
             
             Spacer()
             
-            // MARK: Connection Information
             if !bleManager.isConnected {
                 Button {
                     selectedTab = 2
                 } label: {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            let icon = bleManager.isConnecting ? "arrow.triangle.2.circlepath" : "sensor.tag.radiowaves.forward.fill"
-                            let color: Color = bleManager.isConnecting ? .blue : (bleManager.isBluetoothPoweredOn ? .orange : .red)
+                    HStack(spacing: 16) {
+                        ZStack {
+                            Circle()
+                                .fill(bleManager.isConnecting ? Color.blue.opacity(0.1) : Color.red.opacity(0.1))
+                                .frame(width: 50, height: 50)
                             
-                            Label(bleManager.isConnecting ? "Connecting to Sensor..." : (bleManager.isBluetoothPoweredOn ? "No Sensor Connected" : "Bluetooth Required"), systemImage: icon)
-                                .font(.headline)
-                                .foregroundColor(color)
-                            
-                            Spacer()
-                            
-                            if bleManager.isConnecting {
-                                ProgressView()
-                            } else {
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.bold())
-                                    .foregroundColor(.secondary)
-                            }
+                            Image(systemName: bleManager.isConnecting ? "arrow.triangle.2.circlepath" : "sensor.tag.radiowaves.forward.fill")
+                                .foregroundColor(bleManager.isConnecting ? .blue : .red)
+                                .font(.system(size: 22, weight: .semibold))
                         }
                         
-                        Text(bleManager.isConnecting ? "Re-establishing connection to your last used sensor." : (bleManager.isBluetoothPoweredOn ? "Tap to connect a sensor in the devices tab." : "Activate bluetooth to establish a connection to a sensor."))
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.leading)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(bleManager.isConnecting ? "Connecting..." : (bleManager.isBluetoothPoweredOn ? "No Sensor" : "Bluetooth Off"))
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            Text(bleManager.isConnecting ? "Finding your last device" : "Tap to manage devices")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        if bleManager.isConnecting {
+                            ProgressView()
+                                .tint(.blue)
+                        } else {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(.tertiary)
+                        }
                     }
                     .padding()
-                    .background(Color(.secondarySystemBackground))
-                    .cornerRadius(12)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 4)
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal)
-                .padding(.bottom, 32)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .padding(.bottom, 24)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
     }
     
     // MARK: Active Interface
     private var activeInterface: some View {
-        VStack {
-            // Metrics carousel
+        VStack(spacing: 0) {
             TabView {
                 mainMetricsPage
                 ekgPlaceholderPage
@@ -115,105 +209,149 @@ struct CaptureView: View {
             .tabViewStyle(.page)
             .indexViewStyle(.page(backgroundDisplayMode: .always))
             
-            Spacer()
-            
-            // Active controls
-            VStack(spacing: 24) {
-                // Lap button
-                Button {
-                    sessionManager.addLap()
-                } label: {
-                    Label("LAP", systemImage: "flag.fill")
-                        .font(.title3.bold())
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 24)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(20)
-                }
-                .padding(.horizontal)
-                
-                // Control row
-                HStack(spacing: 20) {
-                    // Stop button
-                    Button {
-                        sessionManager.stopSession()
-                    } label: {
-                        Image(systemName: "stop.fill")
-                            .font(.title)
-                            .frame(width: 80, height: 80)
-                            .background(Color(.tertiarySystemBackground))
-                            .clipShape(Circle())
-                    }
-                    
-                    // Pause/resume toggle
-                    Button {
-                        if sessionManager.state == .recording {
-                            sessionManager.pauseSession()
-                        } else {
-                            sessionManager.resumeSession()
-                        }
-                    } label: {
-                        Label(sessionManager.state == .recording ? "PAUSE" : "RESUME",
-                              systemImage: sessionManager.state == .recording ? "pause.fill" : "play.fill")
-                            .font(.headline.bold())
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 28)
-                            .background(sessionManager.state == .recording ? Color.orange.opacity(0.2) : Color.green.opacity(0.2))
-                            .foregroundColor(sessionManager.state == .recording ? .orange : .green)
-                            .cornerRadius(20)
-                    }
-                }
-                .padding(.horizontal)
-            }
-            .padding(.bottom, 20)
+            activeControls
+                .padding(.top, 16)
+                .padding(.bottom, 32)
         }
     }
     
-    // MARK: Pages
+    // MARK: Active Controls Layout
+    private var activeControls: some View {
+        VStack(spacing: 16) {
+            // LAP
+            if sessionManager.state == .recording {
+                Button {
+                    sessionManager.addLap()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "flag.fill")
+                        Text("LAP")
+                            .tracking(1.5)
+                    }
+                    .font(.title2.weight(.bold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 100) // Much larger target area
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .foregroundColor(.primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                    .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 4)
+                }
+                .clickyButton(weight: .medium, cornerRadius: 32)
+                .padding(.horizontal)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            
+            HStack(spacing: 24) {
+                // STOP
+                if sessionManager.state == .paused {
+                    controlCircle(title: "STOP", icon: "stop.fill", bgColor: .red, fgColor: .white) {
+                        sessionManager.stopSession()
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                }
+                
+                // PAUSE / RESUME
+                if sessionManager.state == .recording {
+                    controlCircle(title: "PAUSE", icon: "pause.fill", bgColor: .orange, fgColor: .white) {
+                        sessionManager.pauseSession()
+                    }
+                } else {
+                    controlCircle(title: "RESUME", icon: "play.fill", bgColor: .green, fgColor: .white) {
+                        sessionManager.resumeSession()
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: sessionManager.state)
+        }
+    }
+    
+    private func controlCircle(title: String, icon: String, bgColor: Color, fgColor: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.headline.weight(.bold))
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .tracking(1)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 72)
+            .background(bgColor)
+            .foregroundColor(fgColor)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .shadow(color: bgColor.opacity(0.4), radius: 8, x: 0, y: 4)
+        }
+        .clickyButton(weight: .medium, cornerRadius: 24)
+    }
+    
+    // MARK: Metrics Pages
     private var mainMetricsPage: some View {
-        VStack(spacing: 40) {
+        VStack(spacing: 32) {
             VStack(spacing: 8) {
                 Text("ELAPSED TIME")
-                    .font(.caption2.bold())
+                    .font(.subheadline.weight(.bold))
                     .foregroundColor(.secondary)
+                    .tracking(1.5)
+                
                 Text(sessionManager.timeString)
-                    .font(.system(size: 72, weight: .bold, design: .rounded))
+                    .font(.system(size: 80, weight: .bold, design: .rounded))
                     .monospacedDigit()
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
             }
             
             HStack(spacing: 16) {
-                VStack(alignment: .leading) {
-                    Label("LIVE BPM", systemImage: "heart.fill")
-                        .font(.caption2.bold())
-                        .foregroundColor(.green)
-                    Text("\(bleManager.currentBpm)")
-                        .font(.system(.title, design: .rounded).bold())
-                }
-                .telemetryCard()
-                
-                VStack(alignment: .leading) {
-                    Label("LAPS", systemImage: "flag.fill")
-                        .font(.caption2.bold())
-                        .foregroundColor(.blue)
-                    Text("\(sessionManager.laps.count)")
-                        .font(.system(.title, design: .rounded).bold())
-                }
-                .telemetryCard()
+                metricCard(title: "LIVE BPM", value: "\(bleManager.currentBpm)", icon: "heart.fill", iconColor: .red)
+                metricCard(title: "LAPS", value: "\(sessionManager.laps.count)", icon: "flag.fill", iconColor: .blue)
             }
-            .padding(.horizontal)
         }
+        .padding(.horizontal)
+        .padding(.bottom, 56)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private func metricCard(title: String, value: String, icon: String, iconColor: Color) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(iconColor)
+                Text(title)
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(.secondary)
+            }
+            
+            Text(value)
+                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .foregroundColor(.primary)
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.03), radius: 8, x: 0, y: 4)
     }
     
     private var ekgPlaceholderPage: some View {
         VStack {
             Text("EKG STREAM")
-                .font(.caption2.bold())
+                .font(.subheadline.weight(.bold))
                 .foregroundColor(.secondary)
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(Color.blue.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [5]))
-                .frame(height: 200)
-                .overlay(Text("Real-time EKG Visualization").foregroundColor(.secondary))
-                .padding()
+                .tracking(1.5)
+            
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(
+                    Text("Real-time EKG Visualization")
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
+                )
+                .shadow(color: .black.opacity(0.03), radius: 8, x: 0, y: 4)
         }
+        .padding(.horizontal)
+        .padding(.bottom, 56)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
