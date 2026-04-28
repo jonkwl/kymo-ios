@@ -1,0 +1,14 @@
+build/
+DerivedData/
+*.hmap
+*.ipa
+*.playground
+
+xcuserdata/
+
+.build/
+.swiftpm/
+
+.DS_Store
+*.swp
+*.lock
