@@ -9,9 +9,12 @@ class BluetoothManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, Pola
     
     private var api: PolarBleApi!
     private let disposeBag = DisposeBag()
+    private var scanDisposable: Disposable?
     
-    var connectionState: String = "No Sensor Detected"
-    var isConnected: Bool = false
+    var isBluetoothPoweredOn: Bool = false
+    var isConnecting: Bool = false
+    var connectedDeviceId: String? = nil
+    var connectionState: String = "Initializing..."
     var currentBpm: Int = 0
     
     struct DiscoveredDevice: Identifiable {
@@ -21,7 +24,21 @@ class BluetoothManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, Pola
     }
     var discoveredDevices: [DiscoveredDevice] = []
     
+    var savedDevices: [String: String] = [:] {
+        didSet {
+            UserDefaults.standard.set(savedDevices, forKey: "SavedPolarSensors")
+        }
+    }
+    
+    var isConnected: Bool {
+        return connectedDeviceId != nil
+    }
+    
     init() {
+        if let saved = UserDefaults.standard.dictionary(forKey: "SavedPolarSensors") as? [String: String] {
+            self.savedDevices = saved
+        }
+        
         api = PolarBleApiDefaultImpl.polarImplementation(DispatchQueue.main, features: [
             .feature_hr,
             .feature_polar_online_streaming
@@ -33,30 +50,50 @@ class BluetoothManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, Pola
     }
     
     func startScanning() {
+        guard isBluetoothPoweredOn else {
+            connectionState = "Bluetooth is turned off"
+            return
+        }
+        
+        guard connectedDeviceId == nil else { return }
+        
         discoveredDevices.removeAll()
         connectionState = "Scanning for Polar devices..."
         
-        api.searchForDevice()
+        stopScanning()
+        
+        scanDisposable = api.searchForDevice()
             .observe(on: MainScheduler.instance)
             .subscribe(onNext: { [weak self] deviceInfo in
                 if deviceInfo.name.contains("H10") {
                     let newDevice = DiscoveredDevice(id: deviceInfo.deviceId, name: deviceInfo.name, rssi: deviceInfo.rssi)
+                    
                     if !(self?.discoveredDevices.contains(where: { $0.id == newDevice.id }) ?? true) {
                         self?.discoveredDevices.append(newDevice)
                     }
                 }
-            }, onError: { error in
-                print("Scan Error: \(error)")
+            }, onError: { [weak self] error in
+                self?.connectionState = "Scan failed"
             })
-            .disposed(by: disposeBag)
     }
     
-    func connectToDevice(id: String) {
-        connectionState = "Connecting to \(id)..."
+    func stopScanning() {
+        scanDisposable?.dispose()
+        scanDisposable = nil
+        if connectedDeviceId == nil && isBluetoothPoweredOn {
+            connectionState = "Ready to scan"
+        }
+    }
+    
+    func connectToDevice(id: String, name: String) {
+        stopScanning()
+        isConnecting = true
+        connectionState = "Connecting to device..."
         do {
             try api.connectToDevice(id)
+            savedDevices[id] = name
         } catch {
-            print("Failed to connect: \(error)")
+            isConnecting = false
             connectionState = "Connection Failed"
         }
     }
@@ -65,50 +102,62 @@ class BluetoothManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, Pola
         do {
             try api.disconnectFromDevice(id)
         } catch {
-            print("Failed to disconnect: \(error)")
+            connectionState = "Disconnect Failed"
         }
     }
     
-    // MARK: - Polar API Callbacks
+    func forgetDevice(id: String) {
+        if connectedDeviceId == id {
+            disconnectFromDevice(id: id)
+        }
+        savedDevices.removeValue(forKey: id)
+        if savedDevices.isEmpty && isBluetoothPoweredOn {
+            startScanning()
+        }
+    }
+    
+    func blePowerOn() {
+        isBluetoothPoweredOn = true
+        connectionState = "Ready to scan"
+    }
+    
+    func blePowerOff() {
+        isBluetoothPoweredOn = false
+        connectedDeviceId = nil
+        stopScanning()
+        connectionState = "Bluetooth is OFF"
+    }
+    
     func deviceConnecting(_ polarDeviceInfo: PolarDeviceInfo) {
-        connectionState = "Connecting..."
+        connectionState = "Connecting to device..."
     }
     
     func deviceConnected(_ polarDeviceInfo: PolarDeviceInfo) {
-        isConnected = true
-        connectionState = "Polar H10 Connected"
+        isConnecting = false
+        connectedDeviceId = polarDeviceInfo.deviceId
+        connectionState = "Connected: \(polarDeviceInfo.name)"
         discoveredDevices.removeAll()
     }
     
     func deviceDisconnected(_ polarDeviceInfo: PolarDeviceInfo, pairingError: Bool) {
-        isConnected = false
-        connectionState = "No Sensor Detected"
-        currentBpm = 0
-    }
-    
-    func blePowerOn() {
-        print("BLE Hardware ist bereit")
-    }
-    
-    func blePowerOff() {
-        connectionState = "Bluetooth is turned OFF"
-        isConnected = false
+        isConnecting = false
+        if connectedDeviceId == polarDeviceInfo.deviceId {
+            connectedDeviceId = nil
+            currentBpm = 0
+            connectionState = "Not Connected"
+        }
     }
     
     func bleSdkFeatureReady(_ identifier: String, feature: PolarBleSdkFeature) {
-        print("Feature ready: \(feature)")
-        
         if feature == .feature_hr {
             api.startHrStreaming(identifier)
-                    .observe(on: MainScheduler.instance)
-                    .subscribe(onNext: { [weak self] hrData in
-                        if let sample = hrData.first {
-                            self?.currentBpm = Int(sample.hr)
-                        }
-                    }, onError: { error in
-                        print("HR Stream Error: \(error)")
-                    })
-                    .disposed(by: disposeBag)
+                .observe(on: MainScheduler.instance)
+                .subscribe(onNext: { [weak self] hrData in
+                    if let sample = hrData.first {
+                        self?.currentBpm = Int(sample.hr)
+                    }
+                })
+                .disposed(by: disposeBag)
         }
     }
 }
