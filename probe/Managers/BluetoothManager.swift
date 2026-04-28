@@ -5,8 +5,7 @@ import CoreBluetooth
 import Observation
 
 @Observable
-class BluetoothManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBleApiDeviceFeaturesObserver {
-    
+class BluetoothManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBleApiDeviceFeaturesObserver, PolarBleApiDeviceInfoObserver {
     private var api: PolarBleApi!
     private let disposeBag = DisposeBag()
     private var scanDisposable: Disposable?
@@ -16,6 +15,7 @@ class BluetoothManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, Pola
     var connectedDeviceId: String? = nil
     var connectionState: String = "Initializing..."
     var currentBpm: Int = 0
+    var sensorBatteryLevel: Int? = nil
     
     struct DiscoveredDevice: Identifiable {
         let id: String
@@ -48,12 +48,15 @@ class BluetoothManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, Pola
         
         api = PolarBleApiDefaultImpl.polarImplementation(DispatchQueue.main, features: [
             .feature_hr,
-            .feature_polar_online_streaming
+            .feature_polar_online_streaming,
+            .feature_battery_info,
+            .feature_device_info
         ])
-        
+
         api.observer = self
         api.powerStateObserver = self
         api.deviceFeaturesObserver = self
+        api.deviceInfoObserver = self
     }
     
     func startScanning() {
@@ -158,6 +161,7 @@ class BluetoothManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, Pola
         if connectedDeviceId == polarDeviceInfo.deviceId {
             connectedDeviceId = nil
             currentBpm = 0
+            sensorBatteryLevel = nil
             connectionState = "Not Connected"
         }
     }
@@ -173,5 +177,21 @@ class BluetoothManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, Pola
                 })
                 .disposed(by: disposeBag)
         }
+    }
+    
+    func batteryLevelReceived(_ identifier: String, batteryLevel: UInt) {
+        self.sensorBatteryLevel = Int(batteryLevel)
+    }
+    
+    func batteryChargingStatusReceived(_ identifier: String, chargingStatus: PolarBleSdk.BleBasClient.ChargeState) {
+        // protocol
+    }
+    
+    func disInformationReceived(_ identifier: String, uuid: CBUUID, value: String) {
+        // protocol
+    }
+    
+    func disInformationReceivedWithKeysAsStrings(_ identifier: String, key: String, value: String) {
+        // protocol
     }
 }
