@@ -15,7 +15,7 @@ class SessionManager {
     var state: SessionState = .idle
     var elapsedTime: TimeInterval = 0
     var laps: [TimeInterval] = []
-    var bleManager: BluetoothManager?
+    var sensorManagerRef: SensorManager?
     
     private var timer: AnyCancellable?
     private var startTime: Date?
@@ -88,7 +88,7 @@ class SessionManager {
                 
                 self.elapsedTime = self.accumulatedTime + Date().timeIntervalSince(start)
                 
-                let currentBpm = self.bleManager?.currentBpm ?? 0
+                let currentBpm = self.sensorManagerRef?.currentBpm ?? 0
                 
                 let newState = SessionAttributes.ContentState(
                     currentBpm: currentBpm,
