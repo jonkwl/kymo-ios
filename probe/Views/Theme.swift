@@ -73,6 +73,103 @@ struct SensorBatteryBadge: View {
     }
 }
 
+struct StartButton: View {
+    let isConnected: Bool
+    let selectedSportIcon: String
+    let selectedSportName: String
+    let action: () -> Void
+    
+    @State private var isPressed = false
+    
+    var body: some View {
+        Button(action: action) {
+            TimelineView(.animation) { context in
+                
+                let time = context.date.timeIntervalSinceReferenceDate
+                
+                // Smooth floating motion (-1.5 → +1.5)
+                let float = sin(time * 1.6) * 2
+                
+                // Smooth breathing glow
+                let glowScale = 1 + (sin(time * 1.2) * 0.04)
+                
+                ZStack {
+                    
+                    // MARK: - Glow (alive)
+                    Circle()
+                        .fill(Color.blue.opacity(0.22))
+                        .frame(width: 290, height: 290)
+                        .blur(radius: 38)
+                        .scaleEffect(glowScale)
+                        .opacity(isConnected ? 1 : 0)
+                    
+                    // MARK: - Main Button (dark-mode friendly)
+                    Circle()
+                        .fill(
+                            isConnected
+                            ? AnyShapeStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color.blue.opacity(0.95),
+                                        Color.cyan.opacity(0.9)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            : AnyShapeStyle(Color(.tertiarySystemFill))
+                        )
+                        .frame(width: 230, height: 230)
+                        .shadow(
+                            color: isConnected
+                                ? Color.black.opacity(0.25)
+                                : .clear,
+                            radius: isPressed ? 10 : 26,
+                            x: 0,
+                            y: isPressed ? 4 : 16
+                        )
+                        .scaleEffect(
+                            isConnected
+                            ? (isPressed ? 0.94 : 1.0)
+                            : 0.96
+                        )
+                        .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isPressed)
+                    
+                    // MARK: - Content (floating smoothly)
+                    VStack(spacing: 12) {
+                        Image(systemName: selectedSportIcon)
+                            .font(.system(size: 58, weight: .semibold))
+                            .symbolRenderingMode(.hierarchical)
+                            .offset(y: float)
+                        
+                        VStack(spacing: 2) {
+                            Text("START")
+                                .font(.system(.title2, design: .rounded).weight(.bold))
+                            
+                            Text(selectedSportName.uppercased())
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundColor(
+                                    isConnected
+                                    ? .white.opacity(0.85)
+                                    : .secondary
+                                )
+                        }
+                    }
+                    .foregroundColor(isConnected ? .white : .secondary)
+                }
+            }
+        }
+        .disabled(!isConnected)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in isPressed = true }
+                .onEnded { _ in isPressed = false }
+        )
+        .scaleEffect(isConnected ? 1.0 : 0.96)
+        .animation(.snappy(duration: 0.35, extraBounce: 0.1), value: isConnected)
+    }
+}
+
 // MARK: View Extensions
 extension View {
     func telemetryCard() -> some View {
