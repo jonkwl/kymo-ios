@@ -6,7 +6,11 @@ struct CaptureView: View {
     
     @Binding var selectedTab: Int
     
+    @AppStorage("isGPSEnabled") private var isGPSEnabled = false
+    @AppStorage("selectedWorkout") private var selectedWorkout: Sport = .running
+    
     @State private var activePage = 0
+    @State private var showingWorkoutSheet = false
 
     var body: some View {
         NavigationStack {
@@ -31,6 +35,10 @@ struct CaptureView: View {
             .toolbarBackground(Color(.systemGroupedBackground), for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
             .animation(.snappy(duration: 0.3), value: sessionManager.state)
+            .sheet(isPresented: $showingWorkoutSheet) {
+                SportSelectionView(selectedSport: $selectedWorkout)
+                    .presentationDragIndicator(.visible)
+            }
         }
     }
     
@@ -59,24 +67,77 @@ struct CaptureView: View {
     
     // MARK: Idle Interface
     private var idleInterface: some View {
-        VStack(spacing: 40) {
+        VStack(spacing: 32) {
             Spacer()
             
+            // Pre-Workout Controls
+            HStack(spacing: 12) {
+                // Workout Switcher
+                Button {
+                    showingWorkoutSheet = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: selectedWorkout.icon)
+                        Text(selectedWorkout.rawValue)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .font(.subheadline.weight(.bold))
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .foregroundColor(.primary)
+                    .clipShape(Capsule())
+                    .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 4)
+                }
+                .buttonStyle(.plain)
+                .clickyButton(weight: .light, cornerRadius: 30)
+                
+                // GPS Toggle
+                Button {
+                    withAnimation(.snappy) {
+                        isGPSEnabled.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: isGPSEnabled ? "location.fill" : "location.slash.fill")
+                            .foregroundColor(isGPSEnabled ? .blue : .secondary)
+                        Text("GPS")
+                    }
+                    .font(.subheadline.weight(.bold))
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
+                    .background(isGPSEnabled ? Color.blue.opacity(0.15) : Color(.secondarySystemGroupedBackground))
+                    .foregroundColor(isGPSEnabled ? .blue : .primary)
+                    .clipShape(Capsule())
+                    .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 4)
+                }
+                .buttonStyle(.plain)
+                .clickyButton(weight: .light, cornerRadius: 30)
+            }
+            
+            // START Button
             Button {
                 sessionManager.startSession()
             } label: {
                 ZStack {
                     Circle()
                         .fill(sensorManager.isConnected ? AnyShapeStyle(Color.blue.gradient) : AnyShapeStyle(Color(.tertiarySystemFill)))
-                        .frame(width: 250, height: 250)
-                        .shadow(color: sensorManager.isConnected ? Color.green.opacity(0.25) : .clear, radius: 24, x: 0, y: 12)
-                                
+                        .frame(width: 230, height: 230)
+                        .shadow(color: sensorManager.isConnected ? Color.blue.opacity(0.25) : .clear, radius: 24, x: 0, y: 12)
+                    
                     VStack(spacing: 12) {
-                        Image(systemName: "figure.run")
+                        Image(systemName: selectedWorkout.icon)
                             .font(.system(size: 60, weight: .medium))
-                                        
-                        Text("START")
-                            .font(.system(.title2, design: .rounded).weight(.bold))
+                        
+                        VStack(spacing: 2) {
+                            Text("START")
+                                .font(.system(.title2, design: .rounded).weight(.bold))
+                            Text(selectedWorkout.rawValue.uppercased())
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundColor(sensorManager.isConnected ? Color.white.opacity(0.8) : .secondary)
+                        }
                     }
                     .foregroundColor(sensorManager.isConnected ? .white : .secondary)
                 }
@@ -204,14 +265,14 @@ struct CaptureView: View {
                         Image(systemName: "flag.fill")
                         Text("Lap")
                     }
-                    .font(.headline.weight(.bold))
+                    .font(.title3.weight(.bold))
                     .frame(maxWidth: .infinity)
                     .frame(height: 72)
                     .background(Color(.secondarySystemGroupedBackground))
                     .foregroundColor(.primary)
                     .clipShape(Capsule())
                 }
-                .clickyButton(weight: .medium, cornerRadius: 28)
+                .clickyButton(weight: .medium, cornerRadius: 36)
                 .padding(.horizontal)
                 .transition(.scale(scale: 0.95).combined(with: .opacity))
             }
