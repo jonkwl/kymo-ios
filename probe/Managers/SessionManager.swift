@@ -13,6 +13,7 @@ class SessionManager {
     
     // MARK: State
     var state: SessionState = .idle
+    var sport: Sport?
     var elapsedTime: TimeInterval = 0
     var laps: [TimeInterval] = []
     var sensorManagerRef: SensorManager?
@@ -32,12 +33,13 @@ class SessionManager {
     }
     
     // MARK: Actions
-    func startSession() {
+    func startSession(sport: Sport) {
         guard state == .idle else { return }
         state = .recording
+        self.sport = sport
         startTime = Date()
         
-        let attributes = SessionAttributes(sessionName: "Session")
+        let attributes = SessionAttributes(sessionName: sport.rawValue)
         let initialState = SessionAttributes.ContentState(currentBpm: 0, elapsedTime: 0)
         
         do {
