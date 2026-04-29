@@ -6,7 +6,10 @@ import Observation
 
 @Observable
 class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBleApiDeviceFeaturesObserver, PolarBleApiDeviceInfoObserver {
+    
+    @ObservationIgnored
     private var api: PolarBleApi!
+    
     private let disposeBag = DisposeBag()
     private var scanDisposable: Disposable?
     
@@ -133,13 +136,19 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
     }
     
     func blePowerOn() {
-        isBluetoothPoweredOn = true
-        
-        if !hasAttemptedInitialConnect, let lastId = lastConnectedDeviceId, let name = savedDevices[lastId] {
-            connectToDevice(id: lastId, name: name)
-        } else {
-            connectionState = "Ready"
-            hasAttemptedInitialConnect = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+                
+            self.isBluetoothPoweredOn = true
+                
+            if !self.hasAttemptedInitialConnect,
+                let lastId = self.lastConnectedDeviceId,
+                let name = self.savedDevices[lastId] {
+                self.connectToDevice(id: lastId, name: name)
+            } else {
+                self.connectionState = "Ready"
+                self.hasAttemptedInitialConnect = true
+            }
         }
     }
     
