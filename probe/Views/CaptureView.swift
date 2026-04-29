@@ -69,11 +69,11 @@ struct CaptureView: View {
                         .font(.caption)
                         .foregroundColor(.blue)
                     Text(selectedSport.rawValue.uppercased())
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .tracking(1.5)
-                        .foregroundColor(.secondary)
+                        .font(.caption)
+                        .foregroundColor(.primary)
                 }
                 .padding(.top, 4)
+                .padding(.horizontal, 4)
             }
         }
         .padding(.horizontal)
@@ -132,54 +132,36 @@ struct CaptureView: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            
-            Button {
-                sessionManager.startSession(sport: selectedSport)
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(sensorManager.isConnected ? AnyShapeStyle(Color.blue.gradient) : AnyShapeStyle(Color(.tertiarySystemFill)))
-                        .frame(width: 230, height: 230)
-                        .shadow(color: sensorManager.isConnected ? Color.blue.opacity(0.25) : .clear, radius: 24, x: 0, y: 12)
-                    
-                    VStack(spacing: 12) {
-                        Image(systemName: selectedSport.icon)
-                            .font(.system(size: 60, weight: .medium))
-                        
-                        VStack(spacing: 2) {
-                            Text("START")
-                                .font(.system(.title2, design: .rounded).weight(.bold))
-                            Text(selectedSport.rawValue.uppercased())
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
-                                .foregroundColor(sensorManager.isConnected ? Color.white.opacity(0.8) : .secondary)
-                        }
-                    }
-                    .foregroundColor(sensorManager.isConnected ? .white : .secondary)
-                }
-            }
-            .disabled(!sensorManager.isConnected)
-            .clickyButton(weight: .medium, cornerRadius: 115)
-            .scaleEffect(sensorManager.isConnected ? 1.0 : 0.96)
             .animation(.snappy(duration: 0.35, extraBounce: 0.1), value: sensorManager.isConnected)
             
-            VStack(spacing: 8) {
-                Text("\(sensorManager.currentBpm)")
-                    .font(.system(size: 64, weight: .semibold, design: .rounded))
-                    .foregroundColor(.primary)
-                    .monospacedDigit()
-                
+            StartButton(
+                isConnected: sensorManager.isConnected,
+                selectedSportIcon: selectedSport.icon,
+                selectedSportName: selectedSport.rawValue,
+                action: {
+                    sessionManager.startSession(sport: selectedSport)
+                }
+            )
+            
+            VStack(spacing: 4) {
                 HStack(spacing: 4) {
                     Image(systemName: "heart.fill")
                         .font(.caption)
                         .foregroundColor(.red)
                     
-                    Text("LIVE BPM")
+                    Text("BPM")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.secondary)
                 }
+                
+                Text("\(sensorManager.currentBpm)")
+                    .font(.system(size: 64, weight: .semibold, design: .rounded))
+                    .foregroundColor(.primary)
+                    .monospacedDigit()
             }
             .opacity(sensorManager.isConnected ? 1 : 0)
             .offset(y: sensorManager.isConnected ? 0 : 10)
+            .padding(.top, 6)
             .animation(.spring(response: 0.4, dampingFraction: 0.7, blendDuration: 0), value: sensorManager.isConnected)
             .onAppear {
                 sessionManager.sensorManagerRef = sensorManager
@@ -371,7 +353,7 @@ struct CaptureView: View {
     // PAGE 2: Location Page
     private var locationPage: some View {
         VStack(spacing: 16) {
-            Text("LIVE MAP")
+            Text("MAP")
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(.secondary)
             
@@ -493,18 +475,17 @@ struct CaptureView: View {
                 
                 ZStack {
                     Capsule()
-                        .fill(Color.black.opacity(0.06))
+                        .fill(Color.black.opacity(0.035))
                     
                     HStack(spacing: 4) {
                         ForEach(1...5, id: \.self) { index in
                             let zone = HeartRateZone(rawValue: index) ?? .zone1
                             let isActive = currentZone.rawValue == index
-                            let isAdjacent = abs(currentZone.rawValue - index) == 1
                             
                             Capsule()
-                                .fill(zone.color.opacity(isActive ? 0.75 : 0.35))
-                                .frame(height: isActive ? 11 : (isAdjacent ? 7 : 5))
-                                .scaleEffect(x: isActive ? 1.15 : 1.0, y: 1.0)
+                                .fill(zone.color.opacity(isActive ? 0.8 : 0.35))
+                                .frame(height: isActive ? 8 : 5)
+                                .scaleEffect(x: isActive ? 1.11 : 1.0, y: 1.0)
                                 .animation(
                                     .spring(response: 0.5, dampingFraction: 0.85),
                                     value: currentZone

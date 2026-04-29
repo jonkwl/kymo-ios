@@ -36,9 +36,8 @@ struct widgetLiveActivity: Widget {
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(context.attributes.sessionName.uppercased())
-                            .font(.caption2.weight(.bold))
+                            .font(.caption.weight(.bold))
                             .foregroundColor(.gray)
-                            .tracking(1.5)
                         
                         Text(formatTime(context.state.elapsedTime))
                             .font(.system(size: 36, weight: .bold, design: .rounded))

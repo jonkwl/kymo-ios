@@ -44,7 +44,8 @@ struct DevicesView: View {
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Devices")
-            .padding(.vertical, 16)
+            .contentMargins(.top, 16, for: .scrollContent)
+            .contentMargins(.bottom, 24, for: .scrollContent)
             .onAppear {
                 if sensorManager.isBluetoothPoweredOn && sensorManager.connectedDeviceId == nil {
                     sensorManager.startScanning()
