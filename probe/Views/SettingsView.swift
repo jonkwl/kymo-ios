@@ -96,20 +96,16 @@ struct SettingsView: View {
                     
                     // MARK: Support the Project
                     Section {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 12) {
-                                tipCard(icon: "cup.and.saucer.fill", title: "Coffee", price: "$3", color: .brown)
-                                tipCard(icon: "bolt.batteryblock.fill", title: "Energy Gel", price: "$5", color: .orange)
-                                tipCard(icon: "takeoutbag.and.cup.and.straw.fill", title: "Protein", price: "$10", color: .purple)
-                            }
-                            .padding(.vertical, 8)
+                        HStack(spacing: 12) {
+                            tipCard(icon: "cup.and.saucer.fill", title: "Coffee", price: "$3", color: .brown)
+                            tipCard(icon: "bolt.heart.fill", title: "Workout", price: "$5", color: .orange)
+                            tipCard(icon: "heart.circle.fill", title: "Supporter", price: "$10", color: .purple)
                         }
-                        .padding(.horizontal, -20)
-                        .safeAreaPadding(.horizontal, 20)
+                        .frame(maxWidth: .infinity)
                     } header: {
                         Text("Support the Developer")
                     } footer: {
-                        Text("ProCapture is ad-free and subscription-free. Tips help keep the lights on and the updates flowing.")
+                        Text("ProCapture is ad-free and subscription-free. Tips help keep the app independent, polished, and updated.")
                     }
                     
                     // MARK: About
@@ -148,41 +144,72 @@ struct SettingsView: View {
     }
     
     // MARK: Subviews
-    private func integrationButton(title: String, icon: String, color: Color, isConnected: Binding<Bool>) -> some View {
+    private func integrationButton(
+        title: String,
+        icon: String,
+        color: Color,
+        isConnected: Binding<Bool>
+    ) -> some View {
         Button {
             Haptics.play(.medium)
+
             withAnimation(.snappy) {
                 isConnected.wrappedValue.toggle()
             }
         } label: {
-            HStack(spacing: 16) {
-                Image(systemName: icon)
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.white)
-                
-                Text(title)
-                    .font(.headline.weight(.semibold))
-                    .foregroundColor(.white)
-                
-                Spacer()
-                
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(.white.opacity(0.18))
+                        .frame(width: 40, height: 40)
+
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.white)
+
+                    Text(isConnected.wrappedValue ? "Connected" : "Tap to connect")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+
+                Spacer(minLength: 12)
+
                 if isConnected.wrappedValue {
-                    HStack(spacing: 4) {
-                        Text("Connected")
-                            .font(.subheadline.weight(.bold))
-                        Image(systemName: "checkmark.circle.fill")
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.black.opacity(0.15))
-                    .clipShape(Capsule())
-                    .foregroundColor(.white)
-                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(color)
+                        .frame(width: 28, height: 28)
+                        .background(.white, in: Circle())
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white.opacity(0.55))
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(color.gradient.opacity(0.9))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(.white.opacity(0.18), lineWidth: 1)
+            }
+            .shadow(color: color.opacity(0.28), radius: 14, x: 0, y: 8)
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
-        .listRowBackground(Rectangle().fill(color.gradient))
+        .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
     
     private func tipCard(icon: String, title: String, price: String, color: Color) -> some View {
