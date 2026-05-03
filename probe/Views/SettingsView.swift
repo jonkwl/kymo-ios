@@ -203,7 +203,6 @@ struct SettingsView: View {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .stroke(.white.opacity(0.18), lineWidth: 1)
             }
-            .shadow(color: color.opacity(0.28), radius: 14, x: 0, y: 8)
             .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(.plain)
