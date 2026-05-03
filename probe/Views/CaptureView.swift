@@ -14,6 +14,7 @@ struct CaptureView: View {
     // UI State
     @State private var activePage = 0
     @State private var showingWorkoutSheet = false
+    @State private var pendingSaveDraft: ActivitySaveDraft?
 
     var body: some View {
         NavigationStack {
@@ -41,6 +42,22 @@ struct CaptureView: View {
             .sheet(isPresented: $showingWorkoutSheet) {
                 SportSelectionView(selectedSport: $selectedSport)
                     .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $pendingSaveDraft) { draft in
+                ActivitySaveView(
+                    draft: draft,
+                    onSave: { metadata in
+                        sessionManager.stopSession()
+                        pendingSaveDraft = nil
+                        
+                        print("Saved note:", metadata.note)
+                        print("Saved RPE:", metadata.rpe as Any)
+                    },
+                    onDiscard: {
+                        sessionManager.stopSession()
+                        pendingSaveDraft = nil
+                    }
+                )
             }
         }
     }
@@ -419,6 +436,24 @@ struct CaptureView: View {
         .padding(.bottom, 56)
     }
     
+    private func makeSaveDraft() -> ActivitySaveDraft {
+        ActivitySaveDraft(
+            sport: selectedSport,
+            durationText: sessionManager.timeString,
+            currentBpmAtEnd: sensorManager.currentBpm > 0 ? sensorManager.currentBpm : nil,
+            averageBpmText: nil, // SET LATER!
+            maxBpmText: nil, // SET LATER!
+            lapCount: sessionManager.laps.count,
+            distanceText: nil, // SET LATER!
+            gpsWasEnabled: isGPSEnabled && selectedSport.useLocation,
+            rrIntervalCount: nil, // SET LATER!
+            ecgSampleCount: sensorManager.ecgSamples.isEmpty ? nil : sensorManager.ecgSamples.count,
+            ecgWasAvailable: sensorManager.isEcgAvailable,
+            startedAt: nil, // SET LATER!
+            endedAt: Date()
+        )
+    }
+    
     // MARK: Active Controls
     private var activeControls: some View {
         VStack(spacing: 12) {
@@ -444,7 +479,7 @@ struct CaptureView: View {
             HStack(spacing: 12) {
                 if sessionManager.state == .paused {
                     controlButton(title: "End", icon: "stop.fill", color: .red) {
-                        sessionManager.stopSession()
+                        pendingSaveDraft = makeSaveDraft()
                     }
                 }
                 
