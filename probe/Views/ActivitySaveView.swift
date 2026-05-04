@@ -25,6 +25,7 @@ struct ActivitySaveDraft: Identifiable, Equatable {
 struct ActivitySaveMetadata {
     let note: String
     let rpe: Int?
+    let customTitle: String?
 }
 
 struct ActivitySaveView: View {
@@ -37,6 +38,11 @@ struct ActivitySaveView: View {
     @State private var note = ""
     @State private var hasRPE = false
     @State private var rpe: Double = 5
+    
+    // Custom Title States
+    @State private var customTitle: String? = nil
+    @State private var isEditingTitle = false
+    @State private var tempTitle = ""
     
     @State private var showingDiscardConfirmation = false
     @State private var showingRecordedData = false
@@ -57,6 +63,20 @@ struct ActivitySaveView: View {
             .navigationTitle("Save Activity")
             .navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled()
+            .alert("Activity Title", isPresented: $isEditingTitle) {
+                TextField("Custom Name", text: $tempTitle)
+                Button("Cancel", role: .cancel) { }
+                Button("Save") {
+                    let trimmed = tempTitle.trimmingCharacters(in: .whitespaces)
+                    if !trimmed.isEmpty && trimmed != draft.sport.rawValue {
+                        withAnimation {
+                            customTitle = trimmed
+                        }
+                    }
+                }
+            } message: {
+                Text("Enter a custom name for your activity.")
+            }
             .alert("Discard activity?", isPresented: $showingDiscardConfirmation) {
                 Button("Cancel", role: .cancel) {}
                 Button("Discard", role: .destructive) {
@@ -77,30 +97,56 @@ struct ActivitySaveView: View {
     // MARK: Header
     
     private var workoutHeader: some View {
-        VStack(spacing: 12) {
+        HStack(spacing: 16) {
             ZStack {
                 Circle()
                     .fill(Color.blue.opacity(0.15))
-                    .frame(width: 80, height: 80)
+                    .frame(width: 64, height: 64)
                 
-                Image(systemName: draft.sport.icon)
-                    .font(.system(size: 36, weight: .semibold))
+                Image(systemName: customTitle == nil ? draft.sport.icon : "tag.fill")
+                    .font(.system(size: 28, weight: .semibold))
                     .foregroundColor(.blue)
             }
             
-            VStack(spacing: 4) {
-                Text(draft.sport.rawValue)
-                    .font(.title.weight(.bold))
-                    .foregroundColor(.primary)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(customTitle ?? draft.sport.rawValue)
+                        .font(.title2.weight(.bold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    
+                    Button {
+                        if customTitle != nil {
+                            withAnimation {
+                                customTitle = nil
+                            }
+                        } else {
+                            tempTitle = draft.sport.rawValue
+                            isEditingTitle = true
+                        }
+                    } label: {
+                        Image(systemName: customTitle != nil ? "arrow.uturn.backward" : "pencil")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(customTitle != nil ? .red : .blue)
+                            .padding(6)
+                            .background(Color.secondary.opacity(0.1))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.borderless)
+                    .padding(.horizontal, 4)
+                }
                 
                 Text("Ended at \(draft.endedAt.formatted(date: .omitted, time: .shortened))")
-                    .font(.callout)
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
             }
+            
+            Spacer()
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
         .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
     }
     
     // MARK: Summary Section
@@ -152,7 +198,7 @@ struct ActivitySaveView: View {
     private var effortSection: some View {
         Section {
             Toggle(isOn: $hasRPE.animation(.snappy)) {
-                Label("Track PRE", systemImage: "gauge")
+                Label("Track RPE", systemImage: "gauge")
                     .foregroundColor(.primary)
             }
             .tint(.orange)
@@ -305,7 +351,8 @@ struct ActivitySaveView: View {
     private func saveActivity() {
         let metadata = ActivitySaveMetadata(
             note: note.trimmingCharacters(in: .whitespacesAndNewlines),
-            rpe: hasRPE ? Int(rpe) : nil
+            rpe: hasRPE ? Int(rpe) : nil,
+            customTitle: customTitle
         )
         onSave(metadata)
         dismiss()
