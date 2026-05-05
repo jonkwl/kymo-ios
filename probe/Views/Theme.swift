@@ -23,7 +23,7 @@ enum Theme {
                 .animation(.interactiveSpring(response: 0.15, dampingFraction: 0.6, blendDuration: 0), value: configuration.isPressed)
                 .onChange(of: configuration.isPressed) { oldValue, newValue in
                     if newValue {
-                        UIImpactFeedbackGenerator(style: hapticWeight).impactOccurred()
+                        Haptics.play(hapticWeight)
                     }
                 }
         }
@@ -87,15 +87,13 @@ struct StartButton: View {
                 
                 let time = context.date.timeIntervalSinceReferenceDate
                 
-                // Smooth floating motion (-1.5 → +1.5)
                 let float = sin(time * 1.6) * 2
                 
-                // Smooth breathing glow
                 let glowScale = 1 + (sin(time * 1.2) * 0.04)
                 
                 ZStack {
                     
-                    // MARK: - Glow (alive)
+                    // MARK: Glow (alive)
                     Circle()
                         .fill(Color.blue.opacity(0.22))
                         .frame(width: 290, height: 290)
@@ -103,7 +101,7 @@ struct StartButton: View {
                         .scaleEffect(glowScale)
                         .opacity(isConnected ? 1 : 0)
                     
-                    // MARK: - Main Button (dark-mode friendly)
+                    // MARK: Main Button (dark-mode friendly)
                     Circle()
                         .fill(
                             isConnected
@@ -135,7 +133,7 @@ struct StartButton: View {
                         )
                         .animation(.spring(response: 0.35, dampingFraction: 0.75), value: isPressed)
                     
-                    // MARK: - Content (floating smoothly)
+                    // MARK: Content (floating smoothly)
                     VStack(spacing: 12) {
                         Image(systemName: selectedSportIcon)
                             .font(.system(size: 58, weight: .semibold))

@@ -125,7 +125,6 @@ struct SettingsView: View {
                                 .padding(.top, 4)
                             
                             Button("View Source on GitHub") {
-                                // action
                             }
                             .font(.footnote.weight(.semibold))
                             .foregroundColor(.blue)
@@ -213,7 +212,6 @@ struct SettingsView: View {
     
     private func tipCard(icon: String, title: String, price: String, color: Color) -> some View {
         Button {
-            // action
         } label: {
             VStack(spacing: 12) {
                 ZStack {

@@ -122,7 +122,6 @@ class SessionManager {
         sensorManagerRef?.stopEcgStreaming()
         timer?.cancel()
         state = .idle
-        // TODO: logic for triggering save modal!
         let liveActivity = activity
         activity = nil
         sport = nil

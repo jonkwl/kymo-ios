@@ -10,9 +10,8 @@ struct CaptureView: View {
     // MARK: Persistent Storage
     @AppStorage("isGPSEnabled") private var isGPSEnabled = false
     @AppStorage("selectedWorkout") private var selectedSport: Sport = .running
-    @AppStorage("userMaxHR") private var userMaxHR: Int = 190 // default fallback
+    @AppStorage("userMaxHR") private var userMaxHR: Int = 190
 
-    // UI State
     @State private var activePage = 0
     @State private var showingWorkoutSheet = false
     @State private var pendingSaveDraft: ActivitySaveDraft?
@@ -278,7 +277,6 @@ struct CaptureView: View {
 
     // MARK: Carousel Pages
 
-    // PAGE 0: Recording Status
     private var recordingStatusPage: some View {
         let quality = sensorManager.connectionQuality
         let isRecording = sessionManager.state == .recording
@@ -340,7 +338,6 @@ struct CaptureView: View {
         }
     }
 
-    // PAGE 1: Main View
     private var mainMetricsPage: some View {
         carouselPage(
             title: "Live Metrics",
@@ -387,7 +384,6 @@ struct CaptureView: View {
         }
     }
 
-    // PAGE 2: Lap View
     private var lapMetricsPage: some View {
         let lap = sessionManager.currentLapMetrics
 
@@ -436,7 +432,6 @@ struct CaptureView: View {
         }
     }
 
-    // PAGE 3: BPM Graph
     private var bpmGraphPage: some View {
         carouselPage(
             title: "Heart Rate",
@@ -446,26 +441,13 @@ struct CaptureView: View {
             horizontalPadding: 0,
             centerContent: false
         ) {
-            ZStack {
-                EcgGridView()
-                    .stroke(Color.white.opacity(0.05), lineWidth: 0.5)
-
-                HeartRateHistoryGraph(samples: sessionManager.heartRateSamples)
-                    .stroke(Color.red.opacity(0.18), style: StrokeStyle(lineWidth: 8, lineCap: .round, lineJoin: .round))
-                    .blur(radius: 3)
-                    .padding(.vertical, 24)
-
-                HeartRateHistoryGraph(samples: sessionManager.heartRateSamples)
-                    .stroke(Color.red.opacity(0.85), style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                    .padding(.vertical, 24)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(maxHeight: .infinity)
-            .background(Color(.secondarySystemGroupedBackground))
+            HeartRateHistoryGraphView(samples: sessionManager.heartRateSamples)
+                .frame(maxWidth: .infinity)
+                .frame(maxHeight: .infinity)
+                .background(Color(.secondarySystemGroupedBackground))
         }
     }
 
-    // PAGE 4: ECG
     private var ecgPage: some View {
         carouselPage(
             title: "ECG",
@@ -475,18 +457,10 @@ struct CaptureView: View {
             horizontalPadding: 0,
             centerContent: false
         ) {
-            ZStack {
-                EcgGridView()
-                    .stroke(Color.white.opacity(0.05), lineWidth: 0.5)
-
-                if sensorManager.isEcgAvailable {
-                    EcgGraphView(samples: sensorManager.ecgSamples)
-                        .padding(.vertical, 24)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(maxHeight: .infinity)
-            .background(Color(.secondarySystemGroupedBackground))
+            EcgGraphPanel(samples: sensorManager.ecgSamples)
+                .frame(maxWidth: .infinity)
+                .frame(maxHeight: .infinity)
+                .background(Color(.secondarySystemGroupedBackground))
         }
     }
 
@@ -501,10 +475,10 @@ struct CaptureView: View {
             lapCount: sessionManager.laps.count,
             distanceText: formattedDistanceSummary(sessionManager.distanceMeters),
             gpsWasEnabled: isGPSEnabled && selectedSport.useLocation,
-            rrIntervalCount: nil, // SET LATER!
+            rrIntervalCount: nil,
             ecgSampleCount: sensorManager.ecgSamples.isEmpty ? nil : sensorManager.ecgSamples.count,
             ecgWasAvailable: sensorManager.isEcgAvailable,
-            startedAt: nil, // SET LATER!
+            startedAt: nil,
             endedAt: Date()
         )
     }
@@ -855,59 +829,6 @@ struct CaptureView: View {
             return .secondary
         }
     }
-}
-
-private struct HeartRateHistoryGraph: Shape {
-    let samples: ContiguousArray<SessionManager.HeartRateSample>
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        guard rect.width > 0, rect.height > 0 else { return path }
-
-        let points = samples.compactMap { sample -> HeartRateGraphPoint? in
-            guard let bpm = sample.bpm else { return nil }
-            return HeartRateGraphPoint(elapsedTime: sample.elapsedTime, bpm: bpm)
-        }
-
-        guard let firstPoint = points.first else { return path }
-
-        let elapsedStart = firstPoint.elapsedTime
-        let elapsedEnd = max(points.last?.elapsedTime ?? elapsedStart, elapsedStart + 1)
-        let elapsedRange = elapsedEnd - elapsedStart
-
-        let bpmValues = points.map(\.bpm)
-        let minBpm = max(30, (bpmValues.min() ?? 30) - 5)
-        let maxBpm = max(minBpm + 1, (bpmValues.max() ?? minBpm) + 5)
-        let bpmRange = maxBpm - minBpm
-
-        func point(for graphPoint: HeartRateGraphPoint) -> CGPoint {
-            let xProgress = CGFloat((graphPoint.elapsedTime - elapsedStart) / elapsedRange)
-            let yProgress = CGFloat(Double(graphPoint.bpm - minBpm) / Double(bpmRange))
-            return CGPoint(
-                x: rect.minX + rect.width * xProgress,
-                y: rect.maxY - rect.height * yProgress
-            )
-        }
-
-        let start = point(for: firstPoint)
-
-        if points.count == 1 {
-            path.addEllipse(in: CGRect(x: start.x - 2, y: start.y - 2, width: 4, height: 4))
-            return path
-        }
-
-        path.move(to: start)
-        for graphPoint in points.dropFirst() {
-            path.addLine(to: point(for: graphPoint))
-        }
-
-        return path
-    }
-}
-
-private struct HeartRateGraphPoint {
-    let elapsedTime: TimeInterval
-    let bpm: Int
 }
 
 private struct CarouselPageTone {

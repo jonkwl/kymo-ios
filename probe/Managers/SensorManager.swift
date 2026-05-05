@@ -302,7 +302,6 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
         }
         
         if feature == .feature_polar_online_streaming {
-            // delay for ble services to have time for registration
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 guard let self = self, let id = self.connectedDeviceId else { return }
                         
@@ -317,7 +316,6 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
                         }
                     }, onFailure: { error in
                         print("Discovery failed: \(error.localizedDescription). Falling back to manual check if H10.")
-                        // h10 ecg fallback
                         if self.savedDevices[id]?.contains("H10") == true {
                             self.applyAvailableStreams([.ecg, .hr], identifier: id)
                             self.isEcgAvailable = true
@@ -333,15 +331,12 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
     }
     
     func batteryChargingStatusReceived(_ identifier: String, chargingStatus: PolarBleSdk.BleBasClient.ChargeState) {
-        // protocol
     }
     
     func disInformationReceived(_ identifier: String, uuid: CBUUID, value: String) {
-        // protocol
     }
     
     func disInformationReceivedWithKeysAsStrings(_ identifier: String, key: String, value: String) {
-        // protocol
     }
     
     func startEcgStreaming() {

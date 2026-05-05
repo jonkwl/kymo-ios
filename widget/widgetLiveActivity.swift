@@ -43,7 +43,7 @@ struct widgetLiveActivity: Widget {
                             .font(.system(size: 36, weight: .bold, design: .rounded))
                             .monospacedDigit()
                             .foregroundColor(.white)
-                            .contentTransition(.identity) // Disables iOS 17 text morphing
+                            .contentTransition(.identity)
                     }
                     
                     Spacer()
@@ -57,7 +57,7 @@ struct widgetLiveActivity: Widget {
                             .font(.system(size: 42, weight: .heavy, design: .rounded))
                             .foregroundColor(.white)
                             .monospacedDigit()
-                            .contentTransition(.identity) // Disables iOS 17 text morphing
+                            .contentTransition(.identity)
                         
                         Text("BPM")
                             .font(.caption2.weight(.bold))
@@ -67,7 +67,6 @@ struct widgetLiveActivity: Widget {
                 }
             }
             .padding(16)
-            // Precise RGB for iOS Dark Mode "systemGroupedBackground"
             .activityBackgroundTint(Color(red: 28/255, green: 28/255, blue: 30/255))
             .activitySystemActionForegroundColor(Color.white)
             
