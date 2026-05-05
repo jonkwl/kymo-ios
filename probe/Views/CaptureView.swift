@@ -365,15 +365,16 @@ struct CaptureView: View {
                 metricCard(title: "Laps", value: "\(sessionManager.laps.count)", icon: "flag.fill", iconColor: .blue)
 
                 if selectedSport.useSpeed {
-                    let unit = selectedSport.typicalPaceUnit == .minPerKm ? "min/km" : "km/h"
+                    let paceUnit = selectedSport.typicalPaceUnit
+                    let unit = paceUnit == .minPerKm ? "min/km" : "km/h"
                     metricCard(title: selectedSport.typicalPaceUnit == .minPerKm ? "Pace" : "Speed",
-                               value: "0.0",
+                               value: formattedPaceOrSpeed(sessionManager.currentPaceSecondsPerKilometer, unit: paceUnit),
                                icon: "speedometer",
                                iconColor: .orange,
                                unit: unit)
 
                     metricCard(title: "Distance",
-                               value: "0.00",
+                               value: formattedDistanceKilometers(sessionManager.distanceMeters),
                                icon: "figure.walk.motion",
                                iconColor: .purple,
                                unit: "km")
@@ -386,14 +387,16 @@ struct CaptureView: View {
 
     // PAGE 2: Lap View
     private var lapMetricsPage: some View {
-        VStack(spacing: 24) {
+        let lap = sessionManager.currentLapMetrics
+
+        return VStack(spacing: 24) {
             VStack(spacing: 12) {
                 VStack(spacing: 4) {
-                    Text("Last Lap Time")
+                    Text("Lap Time")
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(.secondary)
 
-                    Text("00:00")
+                    Text(formattedElapsedTime(lap.duration))
                         .font(.system(size: 76, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                 }
@@ -403,18 +406,19 @@ struct CaptureView: View {
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
                 metricCard(title: "BPM", value: "\(sensorManager.currentBpm)", icon: "heart.fill", iconColor: .red)
-                metricCard(title: "Lap BPM (Avg)", value: "0", icon: "waveform.path.ecg", iconColor: .pink)
+                metricCard(title: "Lap BPM (Avg)", value: formattedBpm(lap.averageBpm), icon: "waveform.path.ecg", iconColor: .pink)
 
                 if selectedSport.useSpeed {
-                    let unit = selectedSport.typicalPaceUnit == .minPerKm ? "min/km" : "km/h"
+                    let paceUnit = selectedSport.typicalPaceUnit
+                    let unit = paceUnit == .minPerKm ? "min/km" : "km/h"
                     metricCard(title: "Lap \(selectedSport.typicalPaceUnit == .minPerKm ? "Pace (Avg)" : "Speed (Avg)")",
-                               value: "0.0",
+                               value: formattedPaceOrSpeed(lap.averagePaceSecondsPerKilometer, unit: paceUnit),
                                icon: "speedometer",
                                iconColor: .orange,
                                unit: unit)
 
                     metricCard(title: "Lap Distance",
-                               value: "0.00",
+                               value: formattedDistanceKilometers(lap.distanceMeters),
                                icon: "figure.walk.motion",
                                iconColor: .purple,
                                unit: "km")
@@ -436,9 +440,14 @@ struct CaptureView: View {
                 EcgGridView()
                     .stroke(Color.white.opacity(0.05), lineWidth: 0.5)
 
-                Text("BPM Chart Visualization")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                HeartRateHistoryGraph(samples: sessionManager.heartRateSamples)
+                    .stroke(Color.red.opacity(0.18), style: StrokeStyle(lineWidth: 8, lineCap: .round, lineJoin: .round))
+                    .blur(radius: 3)
+                    .padding(24)
+
+                HeartRateHistoryGraph(samples: sessionManager.heartRateSamples)
+                    .stroke(Color.red.opacity(0.85), style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                    .padding(24)
             }
             .frame(maxWidth: .infinity)
             .frame(maxHeight: .infinity)
@@ -477,11 +486,11 @@ struct CaptureView: View {
             sport: selectedSport,
             color: .blue,
             durationText: sessionManager.timeString,
-            currentBpmAtEnd: sensorManager.currentBpm > 0 ? sensorManager.currentBpm : nil,
-            averageBpmText: nil, // SET LATER!
-            maxBpmText: nil, // SET LATER!
+            currentBpmAtEnd: currentBpmAtEnd,
+            averageBpmText: sessionManager.averageBpm.map(String.init),
+            maxBpmText: sessionManager.maxBpm.map(String.init),
             lapCount: sessionManager.laps.count,
-            distanceText: nil, // SET LATER!
+            distanceText: formattedDistanceSummary(sessionManager.distanceMeters),
             gpsWasEnabled: isGPSEnabled && selectedSport.useLocation,
             rrIntervalCount: nil, // SET LATER!
             ecgSampleCount: sensorManager.ecgSamples.isEmpty ? nil : sensorManager.ecgSamples.count,
@@ -536,6 +545,55 @@ struct CaptureView: View {
     }
 
     // MARK: View Components
+
+    private var currentBpmAtEnd: Int? {
+        if sensorManager.currentBpm > 0 {
+            return sensorManager.currentBpm
+        }
+
+        return sessionManager.heartRateSamples.reversed().first { $0.bpm != nil }?.bpm
+    }
+
+    private func formattedBpm(_ bpm: Int?) -> String {
+        bpm.map(String.init) ?? "--"
+    }
+
+    private func formattedElapsedTime(_ interval: TimeInterval) -> String {
+        let totalSeconds = max(0, Int(interval.rounded(.down)))
+        let hours = totalSeconds / 3600
+        let minutes = totalSeconds / 60 % 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    private func formattedPaceOrSpeed(_ secondsPerKilometer: TimeInterval?, unit: PaceUnit) -> String {
+        guard let secondsPerKilometer, secondsPerKilometer.isFinite, secondsPerKilometer > 0 else {
+            return "--"
+        }
+
+        switch unit {
+        case .minPerKm:
+            let totalSeconds = Int(secondsPerKilometer.rounded())
+            return String(format: "%d:%02d", totalSeconds / 60, totalSeconds % 60)
+        case .kmPerHour:
+            return String(format: "%.1f", 3_600 / secondsPerKilometer)
+        }
+    }
+
+    private func formattedDistanceKilometers(_ meters: Double?) -> String {
+        guard let meters, meters.isFinite else { return "--" }
+        return String(format: "%.2f", max(0, meters) / 1_000)
+    }
+
+    private func formattedDistanceSummary(_ meters: Double?) -> String? {
+        guard let meters, meters.isFinite else { return nil }
+        return "\(String(format: "%.2f", max(0, meters) / 1_000)) km"
+    }
 
     private var zoneIndicatorView: some View {
         let currentBpm = sensorManager.currentBpm
@@ -680,4 +738,57 @@ struct CaptureView: View {
             return .secondary
         }
     }
+}
+
+private struct HeartRateHistoryGraph: Shape {
+    let samples: ContiguousArray<SessionManager.HeartRateSample>
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        guard rect.width > 0, rect.height > 0 else { return path }
+
+        let points = samples.compactMap { sample -> HeartRateGraphPoint? in
+            guard let bpm = sample.bpm else { return nil }
+            return HeartRateGraphPoint(elapsedTime: sample.elapsedTime, bpm: bpm)
+        }
+
+        guard let firstPoint = points.first else { return path }
+
+        let elapsedStart = firstPoint.elapsedTime
+        let elapsedEnd = max(points.last?.elapsedTime ?? elapsedStart, elapsedStart + 1)
+        let elapsedRange = elapsedEnd - elapsedStart
+
+        let bpmValues = points.map(\.bpm)
+        let minBpm = max(30, (bpmValues.min() ?? 30) - 5)
+        let maxBpm = max(minBpm + 1, (bpmValues.max() ?? minBpm) + 5)
+        let bpmRange = maxBpm - minBpm
+
+        func point(for graphPoint: HeartRateGraphPoint) -> CGPoint {
+            let xProgress = CGFloat((graphPoint.elapsedTime - elapsedStart) / elapsedRange)
+            let yProgress = CGFloat(Double(graphPoint.bpm - minBpm) / Double(bpmRange))
+            return CGPoint(
+                x: rect.minX + rect.width * xProgress,
+                y: rect.maxY - rect.height * yProgress
+            )
+        }
+
+        let start = point(for: firstPoint)
+
+        if points.count == 1 {
+            path.addEllipse(in: CGRect(x: start.x - 2, y: start.y - 2, width: 4, height: 4))
+            return path
+        }
+
+        path.move(to: start)
+        for graphPoint in points.dropFirst() {
+            path.addLine(to: point(for: graphPoint))
+        }
+
+        return path
+    }
+}
+
+private struct HeartRateGraphPoint {
+    let elapsedTime: TimeInterval
+    let bpm: Int
 }
