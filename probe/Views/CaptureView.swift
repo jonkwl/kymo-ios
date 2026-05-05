@@ -3,6 +3,7 @@ import SwiftUI
 struct CaptureView: View {
     @Environment(SensorManager.self) private var sensorManager
     @Environment(SessionManager.self) private var sessionManager
+    @Environment(\.colorScheme) private var colorScheme
 
     @Binding var selectedTab: Int
 
@@ -23,9 +24,9 @@ struct CaptureView: View {
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    customTopBar
-
                     if sessionManager.state == .idle {
+                        customTopBar
+
                         idleInterface
                             .transition(.opacity)
                     } else {
@@ -83,17 +84,6 @@ struct CaptureView: View {
                     SensorBatteryBadge(batteryLevel: batteryLevel, showSensorIcon: true)
                         .transition(.scale.combined(with: .opacity))
                 }
-            } else {
-                HStack {
-                    Image(systemName: selectedSport.icon)
-                        .font(.caption)
-                        .foregroundColor(.blue)
-                    Text(selectedSport.rawValue.uppercased())
-                        .font(.caption)
-                        .foregroundColor(.primary)
-                }
-                .padding(.top, 4)
-                .padding(.horizontal, 4)
             }
         }
         .padding(.horizontal)
@@ -282,6 +272,8 @@ struct CaptureView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 32)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
     }
 
     // MARK: Carousel Pages
@@ -292,10 +284,15 @@ struct CaptureView: View {
         let isRecording = sessionManager.state == .recording
         let gpsIsRecording = isGPSEnabled && selectedSport.useLocation
 
-        return VStack(spacing: 24) {
+        return carouselPage(
+            title: isRecording ? "Recording" : "Paused",
+            subtitle: "Sensor Status",
+            icon: isRecording ? "record.circle.fill" : "pause.circle.fill",
+            tone: recordingPageTone
+        ) {
             VStack(spacing: 12) {
                 VStack(spacing: 4) {
-                    Text("Elapsed Time")
+                    Text("Session Time")
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(.secondary)
 
@@ -303,6 +300,8 @@ struct CaptureView: View {
                         .font(.system(size: 76, weight: .semibold, design: .rounded))
                         .foregroundColor(.primary)
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.55)
                 }
             }
 
@@ -339,13 +338,16 @@ struct CaptureView: View {
                     .multilineTextAlignment(.center)
             }
         }
-        .padding(.horizontal)
-        .padding(.bottom, 56)
     }
 
     // PAGE 1: Main View
     private var mainMetricsPage: some View {
-        VStack(spacing: 24) {
+        carouselPage(
+            title: "Live Metrics",
+            subtitle: "Session Totals",
+            icon: "speedometer",
+            tone: metricsPageTone
+        ) {
             VStack(spacing: 12) {
                 VStack(spacing: 4) {
                     Text("Elapsed Time")
@@ -355,6 +357,8 @@ struct CaptureView: View {
                     Text(sessionManager.timeString)
                         .font(.system(size: 76, weight: .semibold, design: .rounded))
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.55)
                 }
 
                 zoneIndicatorView
@@ -381,15 +385,18 @@ struct CaptureView: View {
                 }
             }
         }
-        .padding(.horizontal)
-        .padding(.bottom, 56)
     }
 
     // PAGE 2: Lap View
     private var lapMetricsPage: some View {
         let lap = sessionManager.currentLapMetrics
 
-        return VStack(spacing: 24) {
+        return carouselPage(
+            title: "Current Lap",
+            subtitle: "Lap \(lap.number)",
+            icon: "flag.fill",
+            tone: lapPageTone
+        ) {
             VStack(spacing: 12) {
                 VStack(spacing: 4) {
                     Text("Lap Time")
@@ -399,6 +406,8 @@ struct CaptureView: View {
                     Text(formattedElapsedTime(lap.duration))
                         .font(.system(size: 76, weight: .semibold, design: .rounded))
                         .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.55)
                 }
 
                 zoneIndicatorView
@@ -425,17 +434,18 @@ struct CaptureView: View {
                 }
             }
         }
-        .padding(.horizontal)
-        .padding(.bottom, 56)
     }
 
     // PAGE 3: BPM Graph
     private var bpmGraphPage: some View {
-        VStack(spacing: 16) {
-            Text("HEART RATE HISTORY")
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(.secondary)
-
+        carouselPage(
+            title: "Heart Rate",
+            subtitle: "History",
+            icon: "heart.fill",
+            tone: heartRatePageTone,
+            horizontalPadding: 0,
+            centerContent: false
+        ) {
             ZStack {
                 EcgGridView()
                     .stroke(Color.white.opacity(0.05), lineWidth: 0.5)
@@ -443,27 +453,28 @@ struct CaptureView: View {
                 HeartRateHistoryGraph(samples: sessionManager.heartRateSamples)
                     .stroke(Color.red.opacity(0.18), style: StrokeStyle(lineWidth: 8, lineCap: .round, lineJoin: .round))
                     .blur(radius: 3)
-                    .padding(24)
+                    .padding(.vertical, 24)
 
                 HeartRateHistoryGraph(samples: sessionManager.heartRateSamples)
                     .stroke(Color.red.opacity(0.85), style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                    .padding(24)
+                    .padding(.vertical, 24)
             }
             .frame(maxWidth: .infinity)
             .frame(maxHeight: .infinity)
             .background(Color(.secondarySystemGroupedBackground))
         }
-        .frame(maxWidth: .infinity)
-        .padding(.bottom, 56)
     }
 
     // PAGE 4: ECG
     private var ecgPage: some View {
-        VStack(spacing: 16) {
-            Text("ECG STREAM")
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(.secondary)
-
+        carouselPage(
+            title: "ECG",
+            subtitle: "Stream",
+            icon: "waveform.path.ecg",
+            tone: ecgPageTone,
+            horizontalPadding: 0,
+            centerContent: false
+        ) {
             ZStack {
                 EcgGridView()
                     .stroke(Color.white.opacity(0.05), lineWidth: 0.5)
@@ -477,8 +488,6 @@ struct CaptureView: View {
             .frame(maxHeight: .infinity)
             .background(Color(.secondarySystemGroupedBackground))
         }
-        .frame(maxWidth: .infinity)
-        .padding(.bottom, 56)
     }
 
     private func makeSaveDraft() -> ActivitySaveDraft {
@@ -545,6 +554,106 @@ struct CaptureView: View {
     }
 
     // MARK: View Components
+
+    private var recordingPageTone: CarouselPageTone {
+        CarouselPageTone(accent: .teal)
+    }
+
+    private var metricsPageTone: CarouselPageTone {
+        CarouselPageTone(accent: .indigo)
+    }
+
+    private var lapPageTone: CarouselPageTone {
+        CarouselPageTone(accent: .orange)
+    }
+
+    private var heartRatePageTone: CarouselPageTone {
+        CarouselPageTone(accent: .red)
+    }
+
+    private var ecgPageTone: CarouselPageTone {
+        CarouselPageTone(accent: .blue)
+    }
+
+    private var carouselPageHeaderFillOpacity: Double {
+        colorScheme == .dark ? 0.14 : 0.08
+    }
+
+    private var carouselPageAccentOpacity: Double {
+        colorScheme == .dark ? 0.48 : 0.34
+    }
+
+    private func carouselPage<Content: View>(
+        title: String,
+        subtitle: String,
+        icon: String,
+        tone: CarouselPageTone,
+        horizontalPadding: CGFloat = 16,
+        centerContent: Bool = true,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        ZStack(alignment: .top) {
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                carouselPageHeader(title: title, subtitle: subtitle, icon: icon, tint: tone.accent)
+                    .padding(.horizontal, 16)
+
+                if centerContent {
+                    Spacer(minLength: 0)
+
+                    VStack(spacing: 24) {
+                        content()
+                    }
+                        .padding(.horizontal, horizontalPadding)
+                        .padding(.top, 8)
+
+                    Spacer(minLength: 0)
+                } else {
+                    content()
+                        .padding(.horizontal, horizontalPadding)
+                        .padding(.top, 16)
+                }
+            }
+            .padding(.top, 15)
+            .padding(.bottom, 56)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(tone.accent.opacity(carouselPageAccentOpacity))
+                .frame(height: 2)
+                .ignoresSafeArea(edges: .horizontal)
+        }
+    }
+
+    private func carouselPageHeader(title: String, subtitle: String, icon: String, tint: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(tint)
+                .frame(width: 30, height: 30)
+                .background(tint.opacity(carouselPageHeaderFillOpacity), in: Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(.primary)
+
+                Text(subtitle.uppercased())
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Capsule()
+                .fill(tint.opacity(carouselPageAccentOpacity))
+                .frame(width: 42, height: 4)
+        }
+        .accessibilityElement(children: .combine)
+    }
 
     private var currentBpmAtEnd: Int? {
         if sensorManager.currentBpm > 0 {
@@ -680,6 +789,8 @@ struct CaptureView: View {
                     .font(.system(size: 34, weight: .semibold, design: .rounded))
                     .foregroundColor(.primary)
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
 
                 if quality.score != nil {
                     Text("/100")
@@ -703,6 +814,8 @@ struct CaptureView: View {
                 Text(title)
                     .font(.caption.weight(.medium))
                     .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
 
             HStack(alignment: .lastTextBaseline, spacing: 4) {
@@ -710,11 +823,15 @@ struct CaptureView: View {
                     .font(.system(size: 34, weight: .semibold, design: .rounded))
                     .foregroundColor(.primary)
                     .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
 
                 if let unit = unit {
                     Text(unit)
                         .font(.caption.weight(.bold))
                         .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
             }
         }
@@ -791,4 +908,8 @@ private struct HeartRateHistoryGraph: Shape {
 private struct HeartRateGraphPoint {
     let elapsedTime: TimeInterval
     let bpm: Int
+}
+
+private struct CarouselPageTone {
+    let accent: Color
 }
