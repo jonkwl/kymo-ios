@@ -49,7 +49,7 @@ struct HistoryView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("My Activities")
+            .navigationTitle("My Recordings")
             .contentMargins(.top, 16, for: .scrollContent)
             .contentMargins(.bottom, 24, for: .scrollContent)
         }

@@ -38,6 +38,10 @@ struct DevicesView: View {
                     savedDevicesSection
                 }
                 
+                if sensorManager.isConnected {
+                    connectionQualitySection
+                }
+                
                 if sensorManager.isBluetoothPoweredOn {
                     discoveredDevicesSection
                 }
@@ -156,6 +160,69 @@ struct DevicesView: View {
         }
     }
     
+    // MARK: Connection Quality Section
+    private var connectionQualitySection: some View {
+        let quality = sensorManager.connectionQuality
+        
+        return Section("Connection Quality") {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label(quality.level.rawValue, systemImage: "antenna.radiowaves.left.and.right")
+                        .font(.headline.weight(.bold))
+                        .foregroundColor(qualityColor(for: quality.level))
+                    
+                    Spacer()
+                    
+                    Text(quality.scoreText)
+                        .font(.system(.title3, design: .rounded).weight(.bold))
+                        .monospacedDigit()
+                        .foregroundColor(qualityColor(for: quality.level))
+                }
+                
+                ProgressView(value: Double(quality.score ?? 0), total: 100)
+                    .tint(qualityColor(for: quality.level))
+            }
+            .padding(.vertical, 6)
+            
+            qualityMetricRow(
+                title: "RSSI",
+                value: quality.rssiText,
+                icon: "dot.radiowaves.left.and.right",
+                color: .blue
+            )
+            
+            qualityMetricRow(
+                title: "Packet Loss",
+                value: quality.packetLossText,
+                icon: "arrow.down.forward.and.arrow.up.backward",
+                color: .orange
+            )
+            
+            qualityMetricRow(
+                title: "Artifacts",
+                value: quality.artifactText,
+                icon: "waveform.path.badge.minus",
+                color: .pink
+            )
+            
+            qualityMetricRow(
+                title: "Contact",
+                value: contactText(for: quality),
+                icon: "sensor.tag.radiowaves.forward",
+                color: quality.contactStatus == false ? .red : .green
+            )
+            
+            if !quality.supportedStreams.isEmpty {
+                qualityMetricRow(
+                    title: "Streams",
+                    value: quality.supportedStreams.joined(separator: ", "),
+                    icon: "waveform",
+                    color: .purple
+                )
+            }
+        }
+    }
+    
     // MARK: Discovered Devices Section
     private var discoveredDevicesSection: some View {
         let filteredDevices = sensorManager.discoveredDevices.filter { !sensorManager.savedDevices.keys.contains($0.id) }
@@ -198,6 +265,47 @@ struct DevicesView: View {
                     }
                 }
             }
+        }
+    }
+    
+    private func qualityMetricRow(title: String, value: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(color)
+                .frame(width: 20)
+            
+            Text(title)
+                .font(.subheadline.weight(.medium))
+            
+            Spacer()
+            
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+        }
+    }
+    
+    private func contactText(for quality: SensorManager.ConnectionQualityMetrics) -> String {
+        guard let contactStatus = quality.contactStatus else { return "--" }
+        return contactStatus ? "OK" : "Weak"
+    }
+    
+    private func qualityColor(for level: SensorManager.ConnectionQualityLevel) -> Color {
+        switch level {
+        case .excellent:
+            return .green
+        case .good:
+            return .blue
+        case .fair:
+            return .orange
+        case .poor:
+            return .red
+        case .unknown:
+            return .secondary
         }
     }
 }

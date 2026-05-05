@@ -66,6 +66,7 @@ class SessionManager {
     }
     
     func stopSession() {
+        sensorManagerRef?.stopEcgStreaming()
         timer?.cancel()
         state = .idle
         // TODO: logic for triggering save modal!
