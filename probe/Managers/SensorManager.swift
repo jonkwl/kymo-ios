@@ -341,8 +341,9 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
     
     func startEcgStreaming() {
         guard isEcgAvailable, let id = connectedDeviceId else { return }
+        guard ecgDisposable == nil else { return }
         
-        stopEcgStreaming()
+        ecgSamples.removeAll()
         
         ecgDisposable = api.requestStreamSettings(id, feature: .ecg)
             .asObservable()
@@ -365,7 +366,9 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
                 self.lastStreamPacketDate = Date()
                 self.recalculateConnectionQuality()
             }, onError: { [weak self] error in
-                self?.registerStreamError(error, source: "ECG")
+                guard let self = self else { return }
+                self.ecgDisposable = nil
+                self.registerStreamError(error, source: "ECG")
             })
     }
     

@@ -5,7 +5,7 @@ import Combine
 
 @Observable
 class SessionManager {
-    enum SessionState {
+    enum SessionState: Equatable {
         case idle
         case recording
         case paused

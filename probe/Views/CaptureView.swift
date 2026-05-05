@@ -259,12 +259,20 @@ struct CaptureView: View {
             }
             .tabViewStyle(.page)
             .indexViewStyle(.page(backgroundDisplayMode: .always))
-            .onChange(of: activePage) { _, newValue in
-                if newValue == 4 && sensorManager.isEcgAvailable {
-                    sensorManager.startEcgStreaming()
-                } else {
-                    sensorManager.stopEcgStreaming()
-                }
+            .onAppear {
+                syncEcgStreaming()
+            }
+            .onDisappear {
+                sensorManager.stopEcgStreaming()
+            }
+            .onChange(of: activePage) { _, _ in
+                syncEcgStreaming()
+            }
+            .onChange(of: sessionManager.state) { _, _ in
+                syncEcgStreaming()
+            }
+            .onChange(of: sensorManager.isEcgAvailable) { _, _ in
+                syncEcgStreaming()
             }
 
             activeControls
@@ -273,6 +281,14 @@ struct CaptureView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
+    }
+
+    private func syncEcgStreaming() {
+        if activePage == 4 && sessionManager.state != .idle && sensorManager.isEcgAvailable {
+            sensorManager.startEcgStreaming()
+        } else {
+            sensorManager.stopEcgStreaming()
+        }
     }
 
     // MARK: Carousel Pages

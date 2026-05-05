@@ -12,9 +12,14 @@ struct EcgGraphPanel: View {
             GraphGridView()
                 .stroke(ecgStyle.grid, lineWidth: 0.6)
 
-            EcgGraphView(samples: samples, style: ecgStyle)
-                .padding(.vertical, 24)
+            if samples.isEmpty {
+                EcgLoadingMessage(style: ecgStyle)
+            } else {
+                EcgGraphView(samples: samples, style: ecgStyle)
+                    .padding(.vertical, 24)
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: samples.isEmpty)
     }
 
     private var ecgStyle: EcgGraphStyle {
@@ -69,24 +74,53 @@ struct EcgGraphView: View {
     }
 }
 
+private struct EcgLoadingMessage: View {
+    let style: EcgGraphStyle
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ProgressView()
+                .tint(style.line)
+
+            VStack(spacing: 4) {
+                Text("Waiting for ECG data")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text("This can take a moment.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .frame(maxWidth: 260)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct EcgGraphStyle {
     let background: Color
     let grid: Color
     let line: Color
     let glow: Color
 
+    private static let traceBlue = Color(red: 0.15, green: 0.39, blue: 0.92)
+
     static let light = EcgGraphStyle(
         background: Color(red: 0.98, green: 0.98, blue: 0.98),
         grid: Color(red: 0.90, green: 0.90, blue: 0.90),
-        line: Color(red: 0.13, green: 0.13, blue: 0.13),
-        glow: Color(red: 0.13, green: 0.13, blue: 0.13).opacity(0.16)
+        line: traceBlue,
+        glow: traceBlue.opacity(0.18)
     )
 
     static let dark = EcgGraphStyle(
         background: Color(red: 0.12, green: 0.12, blue: 0.12),
         grid: Color(red: 0.16, green: 0.16, blue: 0.16),
-        line: Color(red: 0.24, green: 0.86, blue: 0.59),
-        glow: Color(red: 0.24, green: 0.86, blue: 0.59).opacity(0.22)
+        line: traceBlue,
+        glow: traceBlue.opacity(0.30)
     )
 }
 
