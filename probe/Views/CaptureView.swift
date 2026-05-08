@@ -72,7 +72,7 @@ struct CaptureView: View {
                 Image(systemName: "waveform.path.ecg")
                     .foregroundColor(.blue)
                     .font(.system(size: 20, weight: .semibold))
-                Text("ProCapture")
+                Text("Kymo")
                     .font(.system(.title3, design: .rounded).weight(.bold))
             }
 

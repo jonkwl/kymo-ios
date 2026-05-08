@@ -11,7 +11,7 @@ struct widgetLiveActivity: Widget {
                         Image(systemName: "waveform.path.ecg")
                             .foregroundColor(.blue)
                             .font(.system(size: 14, weight: .bold))
-                        Text("ProCapture")
+                        Text("Kymo")
                             .font(.system(.footnote, design: .rounded).weight(.bold))
                             .foregroundColor(.white)
                     }

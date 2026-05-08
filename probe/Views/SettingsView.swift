@@ -15,6 +15,8 @@ enum AppTheme: Int, CaseIterable {
 }
 
 struct SettingsView: View {
+    @Environment(\.openURL) private var openURL
+
     @AppStorage("userMaxHR") private var userMaxHR: Int = 190
     @AppStorage("appTheme") private var appTheme: AppTheme = .system
     @AppStorage("hapticsEnabled") private var hapticsEnabled: Bool = true
@@ -105,7 +107,7 @@ struct SettingsView: View {
                     } header: {
                         Text("Support the Developer")
                     } footer: {
-                        Text("ProCapture is ad-free and subscription-free. Tips help keep the app independent, polished, and updated.")
+                        Text("Kymo is ad-free and subscription-free. Tips help keep the app independent, polished, and updated.")
                     }
                     
                     // MARK: About
@@ -115,7 +117,7 @@ struct SettingsView: View {
                                 .font(.system(size: 40, weight: .semibold))
                                 .foregroundColor(.blue)
                             
-                            Text("ProCapture v1.0")
+                            Text("Kymo v0.1")
                                 .font(.headline.weight(.bold))
                             
                             Text("Built for athletes, by athletes.\nThis is a privacy-first, open-source project. You don't need an account, and all your workout data stays strictly and securely on your own device.")
@@ -125,6 +127,9 @@ struct SettingsView: View {
                                 .padding(.top, 4)
                             
                             Button("View Source on GitHub") {
+                                if let url = URL(string: "https://github.com/jonkwl/kymo-ios") {
+                                    openURL(url)
+                                }
                             }
                             .font(.footnote.weight(.semibold))
                             .foregroundColor(.blue)
