@@ -101,9 +101,22 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
     
     var currentBpm: Int = 0
     
+    enum EcgStreamState: Equatable {
+        case unavailable
+        case initializing
+        case streaming
+        case stopped
+    }
+    
     var isEcgAvailable: Bool = false
     var ecgSamples: [Double] = []
+    var ecgRecordedSampleCount: Int = 0
+    var ecgStreamState: EcgStreamState = .unavailable
     private var ecgDisposable: Disposable?
+    private(set) var ecgFileWriter: EcgFileWriter?
+    
+    private let maxVisibleEcgSamples = 600
+    private let ecgTrimThreshold = 760
     
     struct DiscoveredDevice: Identifiable {
         let id: String
@@ -342,8 +355,7 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
     func startEcgStreaming() {
         guard isEcgAvailable, let id = connectedDeviceId else { return }
         guard ecgDisposable == nil else { return }
-        
-        ecgSamples.removeAll()
+        ecgStreamState = .initializing
         
         ecgDisposable = api.requestStreamSettings(id, feature: .ecg)
             .asObservable()
@@ -356,11 +368,16 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
                 guard let self = self else { return }
                 
                 let newSamples = polarEcgData.map { Double($0.voltage) }
+                self.ecgRecordedSampleCount += newSamples.count
+                self.ecgStreamState = .streaming
+
+                // Stream to disk first — display buffer is secondary.
+                self.ecgFileWriter?.write(newSamples)
                 
                 self.ecgSamples.append(contentsOf: newSamples)
                 
-                if self.ecgSamples.count > 600 {
-                    self.ecgSamples.removeFirst(self.ecgSamples.count - 600)
+                if self.ecgSamples.count > self.ecgTrimThreshold {
+                    self.ecgSamples.removeFirst(self.ecgSamples.count - self.maxVisibleEcgSamples)
                 }
                 
                 self.lastStreamPacketDate = Date()
@@ -368,14 +385,37 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
             }, onError: { [weak self] error in
                 guard let self = self else { return }
                 self.ecgDisposable = nil
+                self.ecgStreamState = self.isEcgAvailable ? .stopped : .unavailable
                 self.registerStreamError(error, source: "ECG")
             })
     }
     
-    func stopEcgStreaming() {
+    func stopEcgStreaming(clearSamples: Bool = true) {
         ecgDisposable?.dispose()
         ecgDisposable = nil
-        ecgSamples.removeAll()
+        ecgStreamState = isEcgAvailable ? .stopped : .unavailable
+        if clearSamples {
+            ecgSamples.removeAll(keepingCapacity: true)
+        }
+    }
+    
+    func prepareEcgRecordingForSession(sessionId: UUID) {
+        ecgRecordedSampleCount = 0
+        ecgSamples.removeAll(keepingCapacity: true)
+        ecgStreamState = isEcgAvailable ? .initializing : .unavailable
+        ecgFileWriter = EcgFileWriter(sessionId: sessionId)
+    }
+
+    /// Flushes and closes the ECG file, keeping it on disk. Call on the save path.
+    func finalizeEcgRecording() {
+        ecgFileWriter?.close()
+        ecgFileWriter = nil
+    }
+
+    /// Closes and deletes the ECG file. Call on the discard path.
+    func discardEcgRecording() {
+        ecgFileWriter?.delete()
+        ecgFileWriter = nil
     }
     
     private func startHrStreaming(for identifier: String) {
@@ -433,6 +473,9 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
         availableStreamDataTypes.formUnion(dataTypes)
         availableOnlineStreamTypes = streamNames(from: availableStreamDataTypes)
         isEcgAvailable = availableStreamDataTypes.contains(.ecg)
+        if !isEcgAvailable && ecgDisposable == nil {
+            ecgStreamState = .unavailable
+        }
         
         if isEcgAvailable {
             print("ECG Feature detected and ready.")
@@ -557,6 +600,11 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
         availableOnlineStreamTypes.removeAll()
         connectionQuality = .unknown
         isEcgAvailable = false
+        ecgStreamState = .unavailable
+        ecgRecordedSampleCount = 0
+        ecgSamples.removeAll(keepingCapacity: true)
+        ecgFileWriter?.close()
+        ecgFileWriter = nil
         
         if initialRssi != nil {
             recalculateConnectionQuality()
