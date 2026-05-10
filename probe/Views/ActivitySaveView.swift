@@ -395,7 +395,7 @@ struct ActivitySaveView: View {
                     unsupportedDataRow(title: "ECG", icon: "bolt.heart.fill", color: .blue)
                 }
             } label: {
-                Label("Health Metrics", systemImage: "heart.text.square")
+                Label("Recorded Data", systemImage: "heart.text.square")
                     .foregroundColor(.primary)
             }
         }

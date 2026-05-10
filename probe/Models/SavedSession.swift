@@ -7,26 +7,31 @@ final class SavedSession {
     var sport: String
     var title: String
     var colorName: String
-    var note: String
+    var note: String = ""
     var rpe: Int?
     var startedAt: Date
     var endedAt: Date
     var durationSeconds: Double
     var averageBpm: Int?
     var maxBpm: Int?
-    var lapCount: Int
+    var lapCount: Int = 0
     var distanceMeters: Double?
 
+    // Whether RR intervals were received during this session.
+    var hasRRIntervals: Bool = false
+    // Total number of RR intervals received during the session.
+    var rrIntervalCount: Int = 0
+
     // Whether a valid ECG file exists for this session.
-    var hasEcg: Bool
+    var hasEcg: Bool = false
     // Total number of ECG samples written to disk during the session.
-    var ecgSampleCount: Int
+    var ecgSampleCount: Int = 0
 
     // Binary-packed HR timeline: each sample is 6 bytes — Float32 elapsed seconds + Int16 bpm (-1 = no signal).
-    var hrSamplesData: Data
+    var hrSamplesData: Data = Data()
 
     // JSON-encoded array of `LapRecord`.
-    var lapsData: Data
+    var lapsData: Data = Data()
 
     init(
         id: UUID,
@@ -42,6 +47,8 @@ final class SavedSession {
         maxBpm: Int?,
         lapCount: Int,
         distanceMeters: Double?,
+        hasRRIntervals: Bool,
+        rrIntervalCount: Int,
         hasEcg: Bool,
         ecgSampleCount: Int,
         hrSamplesData: Data,
@@ -60,6 +67,8 @@ final class SavedSession {
         self.maxBpm = maxBpm
         self.lapCount = lapCount
         self.distanceMeters = distanceMeters
+        self.hasRRIntervals = hasRRIntervals
+        self.rrIntervalCount = rrIntervalCount
         self.hasEcg = hasEcg
         self.ecgSampleCount = ecgSampleCount
         self.hrSamplesData = hrSamplesData

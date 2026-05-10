@@ -41,9 +41,7 @@ struct SessionDetailView: View {
                     if !laps.isEmpty {
                         lapsCard
                     }
-                    if session.hasEcg {
-                        ecgSamplesCard
-                    }
+                    recordedDataCard
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 32)
@@ -263,15 +261,55 @@ struct SessionDetailView: View {
         }
     }
 
-    /// Full-width metric card placed at the bottom of the session overview (after laps).
-    private var ecgSamplesCard: some View {
-        metricTile(
-            title: "ECG Samples",
-            value: compactEcgCount(session.ecgSampleCount),
-            unit: nil,
-            icon: "bolt.heart.fill",
-            color: accentColor
-        )
+    // MARK: Recorded data card
+
+    private var recordedDataCard: some View {
+        sectionCard {
+            VStack(alignment: .leading, spacing: 12) {
+                label("Recorded Data", icon: "heart.text.square", color: accentColor)
+
+                VStack(spacing: 0) {
+                    recordedDataRow(title: "Heart Rate", icon: "heart.fill", color: .red)
+                    if session.hasRRIntervals {
+                        Divider().padding(.leading, 32)
+                        recordedDataRow(title: "RR Intervals", icon: "waveform.path.ecg", color: .pink)
+                    }
+                    if session.hasEcg {
+                        Divider().padding(.leading, 32)
+                        recordedDataRow(
+                            title: "ECG",
+                            icon: "bolt.heart.fill",
+                            color: .blue,
+                            detail: compactEcgCount(session.ecgSampleCount) + " samples"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private func recordedDataRow(title: String, icon: String, color: Color, detail: String? = nil) -> some View {
+        HStack {
+            Label {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+            } icon: {
+                Image(systemName: icon)
+                    .foregroundStyle(color)
+            }
+            Spacer()
+            if let detail {
+                Text(detail)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+            } else {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.subheadline)
+            }
+        }
+        .padding(.vertical, 8)
     }
 
     private func rpeCard(rpe: Int) -> some View {

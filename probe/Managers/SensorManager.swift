@@ -112,6 +112,9 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
     var ecgSamples: [Double] = []
     var ecgRecordedSampleCount: Int = 0
     var ecgStreamState: EcgStreamState = .unavailable
+
+    /// Total RR intervals received during the current recording session.
+    var rrIntervalRecordedCount: Int = 0
     private var ecgDisposable: Disposable?
     private(set) var ecgFileWriter: EcgFileWriter?
     
@@ -401,6 +404,7 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
     
     func prepareEcgRecordingForSession(sessionId: UUID) {
         ecgRecordedSampleCount = 0
+        rrIntervalRecordedCount = 0
         ecgSamples.removeAll(keepingCapacity: true)
         ecgStreamState = isEcgAvailable ? .initializing : .unavailable
         ecgFileWriter = EcgFileWriter(sessionId: sessionId)
@@ -507,6 +511,10 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
         latestPpgQuality = sample.ppgQuality > 0 ? Int(sample.ppgQuality) : nil
         latestContactStatus = sample.contactStatusSupported ? sample.contactStatus : nil
         latestRRAvailable = sample.rrAvailable
+
+        if sample.rrAvailable && !sample.rrsMs.isEmpty {
+            rrIntervalRecordedCount += sample.rrsMs.count
+        }
         
         let hasPpgQuality = sample.ppgQuality > 0
         let hasContactQuality = sample.contactStatusSupported
@@ -602,6 +610,7 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
         isEcgAvailable = false
         ecgStreamState = .unavailable
         ecgRecordedSampleCount = 0
+        rrIntervalRecordedCount = 0
         ecgSamples.removeAll(keepingCapacity: true)
         ecgFileWriter?.close()
         ecgFileWriter = nil
@@ -645,6 +654,12 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
             packetAge: packetAge
         )
         
+        var streams = availableOnlineStreamTypes
+        if latestRRAvailable == true && !streams.contains("RR Intervals") {
+            streams.append("RR Intervals")
+            streams.sort()
+        }
+
         connectionQuality = ConnectionQualityMetrics(
             score: score,
             level: qualityLevel(for: score),
@@ -656,7 +671,7 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
             rrAvailable: latestRRAvailable,
             streamErrorCount: streamErrorCount,
             lastPacketAge: packetAge,
-            supportedStreams: availableOnlineStreamTypes,
+            supportedStreams: streams,
             lastUpdatedAt: Date()
         )
     }

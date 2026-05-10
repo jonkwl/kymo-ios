@@ -493,7 +493,7 @@ struct CaptureView: View {
             lapCount: sessionManager.laps.count,
             distanceText: formattedDistanceSummary(sessionManager.distanceMeters),
             gpsWasEnabled: isGPSEnabled && selectedSport.useLocation,
-            rrIntervalCount: nil,
+            rrIntervalCount: sensorManager.rrIntervalRecordedCount > 0 ? sensorManager.rrIntervalRecordedCount : nil,
             ecgSampleCount: sensorManager.ecgRecordedSampleCount > 0 ? sensorManager.ecgRecordedSampleCount : nil,
             ecgWasAvailable: sensorManager.isEcgAvailable,
             startedAt: sessionManager.sessionStartedAt,
@@ -514,6 +514,8 @@ struct CaptureView: View {
         let sessionId = sessionManager.currentSessionId ?? UUID()
         let hasEcg = (draft.ecgSampleCount ?? 0) > 0
 
+        let hasRRIntervals = (draft.rrIntervalCount ?? 0) > 0
+
         let saved = SavedSession(
             id: sessionId,
             sport: draft.sport.rawValue,
@@ -528,6 +530,8 @@ struct CaptureView: View {
             maxBpm: sessionManager.maxBpm,
             lapCount: sessionManager.laps.count,
             distanceMeters: sessionManager.distanceMeters,
+            hasRRIntervals: hasRRIntervals,
+            rrIntervalCount: draft.rrIntervalCount ?? 0,
             hasEcg: hasEcg,
             ecgSampleCount: draft.ecgSampleCount ?? 0,
             hrSamplesData: hrData,
