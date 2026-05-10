@@ -27,6 +27,9 @@ struct SessionDetailView: View {
 
                 VStack(spacing: 16) {
                     durationCard
+                    if !session.note.isEmpty {
+                        notesCard
+                    }
                     if !hrSamples.isEmpty {
                         heartRateCard
                         zoneDistributionCard
@@ -34,9 +37,6 @@ struct SessionDetailView: View {
                     metricsGrid
                     if !laps.isEmpty {
                         lapsCard
-                    }
-                    if !session.note.isEmpty {
-                        notesCard
                     }
                 }
                 .padding(.horizontal, 16)
@@ -156,73 +156,86 @@ struct SessionDetailView: View {
                     .padding(.top, 16)
                     .padding(.bottom, 8)
 
-                HeartRateHistoryGraphView(samples: hrSamples)
-                    .frame(height: 180)
-                    .padding(.bottom, 8)
+                HeartRateHistoryGraphView(
+                    samples: hrSamples,
+                    lapTimestamps: laps.map(\.endTime)
+                )
+                .frame(height: 180)
+                .padding(.bottom, 8)
             }
         }
     }
 
     // MARK: Zone distribution card
 
+    @ViewBuilder
     private var zoneDistributionCard: some View {
         let distribution = zoneDistribution
-        let activeZones = HeartRateZone.allCases.filter { $0 != .none && (distribution[$0] ?? 0) > 0 }
+        let activeZones = HeartRateZone.allCases
+            .filter { $0 != .none && (distribution[$0] ?? 0) > 0 }
+            .sorted { $0.rawValue < $1.rawValue }
 
-        return sectionCard {
-            VStack(alignment: .leading, spacing: 14) {
-                label("Zone Distribution", icon: "chart.bar.fill", color: .orange)
+        if !activeZones.isEmpty {
+            sectionCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    label("Heart Rate Zones", icon: "chart.bar.fill", color: .orange)
 
-                if !activeZones.isEmpty {
                     GeometryReader { geo in
-                        HStack(spacing: 2) {
+                        HStack(spacing: 3) {
                             ForEach(activeZones, id: \.rawValue) { zone in
                                 let fraction = distribution[zone] ?? 0
-                                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
                                     .fill(zone.color)
-                                    .frame(width: max(4, geo.size.width * CGFloat(fraction)))
+                                    .frame(width: max(6, geo.size.width * CGFloat(fraction)))
                             }
                         }
                     }
-                    .frame(height: 14)
+                    .frame(height: 16)
                     .clipShape(Capsule())
 
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    VStack(spacing: 10) {
                         ForEach(activeZones, id: \.rawValue) { zone in
                             zoneRow(zone: zone, fraction: distribution[zone] ?? 0)
                         }
                     }
-                } else {
-                    Text("No zone data available.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
                 }
             }
         }
     }
 
     private func zoneRow(zone: HeartRateZone, fraction: Double) -> some View {
-        HStack(spacing: 8) {
-            Circle()
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
                 .fill(zone.color)
-                .frame(width: 8, height: 8)
+                .frame(width: 4, height: 36)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Z\(zone.rawValue) \(zone.name)")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Text(String(format: "%.0f%%", fraction * 100))
-                    .font(.caption.weight(.bold))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(zoneName(for: zone))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
+                Text(formattedZoneTime(fraction))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
 
             Spacer()
 
-            Text(formattedZoneTime(fraction))
-                .font(.caption.weight(.semibold))
+            Text(String(format: "%.0f%%", fraction * 100))
+                .font(.title3.weight(.bold))
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(zone.color)
+        }
+    }
+
+    private func zoneName(for zone: HeartRateZone) -> String {
+        switch zone {
+        case .zone1: return "Zone 1 · Very Light"
+        case .zone2: return "Zone 2 · Light"
+        case .zone3: return "Zone 3 · Moderate"
+        case .zone4: return "Zone 4 · Hard"
+        case .zone5: return "Zone 5 · Maximum"
+        case .none:  return ""
         }
     }
 
@@ -241,15 +254,6 @@ struct SessionDetailView: View {
                     unit: "km",
                     icon: "figure.walk.motion",
                     color: .purple
-                )
-            }
-            if session.lapCount > 0 {
-                metricTile(
-                    title: "Laps",
-                    value: "\(session.lapCount)",
-                    unit: nil,
-                    icon: "flag.fill",
-                    color: .blue
                 )
             }
             if session.hasEcg {
@@ -471,10 +475,13 @@ struct SessionDetailView: View {
     }
 
     private func formattedZoneTime(_ fraction: Double) -> String {
-        let seconds = Int((fraction * session.durationSeconds).rounded())
-        let m = seconds / 60
-        let s = seconds % 60
-        return String(format: "%d:%02d", m, s)
+        let total = Int((fraction * session.durationSeconds).rounded())
+        let h = total / 3600
+        let m = total / 60 % 60
+        let s = total % 60
+        if h > 0 { return String(format: "%dh %02dm %02ds", h, m, s) }
+        if m > 0 { return String(format: "%dm %02ds", m, s) }
+        return String(format: "%ds", s)
     }
 
     private func fullDateString(_ date: Date) -> String {

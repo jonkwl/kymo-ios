@@ -386,11 +386,12 @@ struct CaptureView: View {
     }
 
     private var lapMetricsPage: some View {
+        let hasLaps = !sessionManager.laps.isEmpty
         let lap = sessionManager.currentLapMetrics
 
         return carouselPage(
             title: "Current Lap",
-            subtitle: "Lap \(lap.number)",
+            subtitle: hasLaps ? "Lap \(lap.number)" : "No Lap Yet",
             icon: "flag.fill",
             tone: lapPageTone
         ) {
@@ -400,34 +401,39 @@ struct CaptureView: View {
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(.secondary)
 
-                    Text(formattedElapsedTime(lap.duration))
+                    Text(hasLaps ? formattedElapsedTime(lap.duration) : "–")
                         .font(.system(size: 76, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.55)
                 }
 
-                zoneIndicatorView
+                if hasLaps {
+                    zoneIndicatorView
+                }
             }
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
                 metricCard(title: "BPM", value: "\(sensorManager.currentBpm)", icon: "heart.fill", iconColor: .red)
-                metricCard(title: "Lap BPM (Avg)", value: formattedBpm(lap.averageBpm), icon: "waveform.path.ecg", iconColor: .pink)
+                metricCard(title: "Lap BPM (Avg)",
+                           value: hasLaps ? formattedBpm(lap.averageBpm) : "–",
+                           icon: "waveform.path.ecg",
+                           iconColor: .pink)
 
                 if selectedSport.useSpeed {
                     let paceUnit = selectedSport.typicalPaceUnit
                     let unit = paceUnit == .minPerKm ? "min/km" : "km/h"
                     metricCard(title: "Lap \(selectedSport.typicalPaceUnit == .minPerKm ? "Pace (Avg)" : "Speed (Avg)")",
-                               value: formattedPaceOrSpeed(lap.averagePaceSecondsPerKilometer, unit: paceUnit),
+                               value: hasLaps ? formattedPaceOrSpeed(lap.averagePaceSecondsPerKilometer, unit: paceUnit) : "–",
                                icon: "speedometer",
                                iconColor: .orange,
-                               unit: unit)
+                               unit: hasLaps ? unit : nil)
 
                     metricCard(title: "Lap Distance",
-                               value: formattedDistanceKilometers(lap.distanceMeters),
+                               value: hasLaps ? formattedDistanceKilometers(lap.distanceMeters) : "–",
                                icon: "figure.walk.motion",
                                iconColor: .purple,
-                               unit: "km")
+                               unit: hasLaps ? "km" : nil)
                 }
             }
         }
@@ -442,10 +448,13 @@ struct CaptureView: View {
             horizontalPadding: 0,
             centerContent: false
         ) {
-            HeartRateHistoryGraphView(samples: sessionManager.heartRateSamples)
-                .frame(maxWidth: .infinity)
-                .frame(maxHeight: .infinity)
-                .background(Color(.secondarySystemGroupedBackground))
+            HeartRateHistoryGraphView(
+                samples: sessionManager.heartRateSamples,
+                lapTimestamps: sessionManager.laps
+            )
+            .frame(maxWidth: .infinity)
+            .frame(maxHeight: .infinity)
+            .background(Color(.secondarySystemGroupedBackground))
         }
     }
 
