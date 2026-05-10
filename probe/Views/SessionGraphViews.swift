@@ -136,6 +136,8 @@ struct EcgGraphStyle {
 
 struct HeartRateHistoryGraphView: View {
     let samples: ContiguousArray<SessionManager.HeartRateSample>
+    /// Elapsed-time positions (seconds) where a lap was completed. Drawn as vertical markers.
+    var lapTimestamps: [TimeInterval] = []
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -189,8 +191,48 @@ struct HeartRateHistoryGraphView: View {
                         Color.red.opacity(colorScheme == .dark ? 0.92 : 0.86),
                         style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round)
                     )
+
+                // Lap markers
+                if !lapTimestamps.isEmpty {
+                    lapMarkerLines(in: chartRect, timeRange: timeRange)
+                        .stroke(
+                            Color.primary.opacity(colorScheme == .dark ? 0.30 : 0.22),
+                            style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                        )
+
+                    ForEach(Array(lapTimestamps.enumerated()), id: \.offset) { index, time in
+                        let elapsed = max(1.0, timeRange.upperBound - timeRange.lowerBound)
+                        let xFraction = CGFloat((time - timeRange.lowerBound) / elapsed)
+                        let x = chartRect.minX + chartRect.width * xFraction
+                        if x > chartRect.minX + 2 && x < chartRect.maxX - 2 {
+                            Text("\(index + 1)")
+                                .font(.system(size: 8, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color.primary.opacity(0.65))
+                                .padding(.horizontal, 3.5)
+                                .padding(.vertical, 1.5)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                        .fill(Color(.systemBackground).opacity(0.88))
+                                )
+                                .position(x: x, y: chartRect.minY + 9)
+                        }
+                    }
+                }
             }
         }
+    }
+
+    private func lapMarkerLines(in rect: CGRect, timeRange: ClosedRange<TimeInterval>) -> Path {
+        var path = Path()
+        let elapsed = max(1.0, timeRange.upperBound - timeRange.lowerBound)
+        for time in lapTimestamps {
+            let xFraction = CGFloat((time - timeRange.lowerBound) / elapsed)
+            let x = rect.minX + rect.width * xFraction
+            guard x > rect.minX + 2 && x < rect.maxX - 2 else { continue }
+            path.move(to: CGPoint(x: x, y: rect.minY))
+            path.addLine(to: CGPoint(x: x, y: rect.maxY))
+        }
+        return path
     }
 
     private var graphPoints: [HeartRateGraphPoint] {
