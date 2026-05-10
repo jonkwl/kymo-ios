@@ -155,6 +155,18 @@ extension SavedSession {
         (try? JSONDecoder().decode([LapRecord].self, from: lapsData)) ?? []
     }
 
+    // MARK: Display
+
+    /// Matches the save sheet: a custom title differs from the sport name.
+    var hasCustomTitle: Bool {
+        title.trimmingCharacters(in: .whitespacesAndNewlines) != sport
+    }
+
+    /// List / hero icon: tag for custom titles, otherwise the sport icon.
+    var sessionDisplayIconSystemName: String {
+        hasCustomTitle ? "tag.fill" : (Sport(rawValue: sport)?.icon ?? "heart.fill")
+    }
+
     // MARK: ECG file URL
 
     // URL of the ECG binary file for this session, if it exists.

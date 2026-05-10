@@ -108,7 +108,7 @@ struct HistoryView: View {
                         .fill(color.gradient)
                         .frame(width: 44, height: 44)
 
-                    Image(systemName: Sport(rawValue: session.sport)?.icon ?? "heart.fill")
+                    Image(systemName: session.sessionDisplayIconSystemName)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
                 }

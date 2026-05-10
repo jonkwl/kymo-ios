@@ -376,79 +376,19 @@ struct ActivitySaveView: View {
     
     private var recordedDataSection: some View {
         Section {
-            DisclosureGroup(isExpanded: $showingRecordedData) {
-                if draft.gpsWasEnabled {
-                    dataRow(title: "Location Route", detail: "Saved", icon: "location.fill", color: .green)
-                }
-                
-                dataRow(title: "Heart Rate", detail: "Recorded", icon: "heart.fill", color: .red)
-                
-                if rrWasIncluded {
-                    dataRow(title: "RR-Intervals", detail: "Recorded", icon: "waveform.path.ecg", color: .pink)
-                } else {
-                    unsupportedDataRow(title: "RR-Intervals", icon: "waveform.path.ecg", color: .pink)
-                }
-                
-                if ecgWasIncluded {
-                    dataRow(title: "ECG", detail: "Recorded", icon: "bolt.heart.fill", color: .blue)
-                } else {
-                    unsupportedDataRow(title: "ECG", icon: "bolt.heart.fill", color: .blue)
-                }
-            } label: {
-                Label("Recorded Data", systemImage: "heart.text.square")
-                    .foregroundColor(.primary)
-            }
+            RecordedDataDisclosureBlock(
+                isExpanded: $showingRecordedData,
+                showLocationRoute: draft.gpsWasEnabled,
+                rrIntervalsRecorded: (draft.rrIntervalCount ?? 0) > 0,
+                ecgRecorded: (draft.ecgSampleCount ?? 0) > 0,
+                showMissingSensorRows: true,
+                onUnsupportedMetric: { name in
+                    alertMetricName = name
+                    showingSensorAlert = true
+                },
+                presentation: .form
+            )
         }
-    }
-    
-    private func dataRow(title: String, detail: String, icon: String, color: Color) -> some View {
-        HStack {
-            Label {
-                Text(title)
-            } icon: {
-                Image(systemName: icon).foregroundColor(color)
-            }
-            Spacer()
-            Text(detail)
-                .foregroundColor(.secondary)
-                .font(.subheadline)
-        }
-        .padding(.vertical, 2)
-    }
-    
-    private func unsupportedDataRow(title: String, icon: String, color: Color) -> some View {
-        HStack {
-            Label {
-                Text(title)
-                    .foregroundColor(.secondary)
-            } icon: {
-                Image(systemName: icon).foregroundColor(color.opacity(0.4))
-            }
-            
-            Spacer()
-            
-            Button {
-                alertMetricName = title
-                showingSensorAlert = true
-            } label: {
-                HStack(spacing: 4) {
-                    Text("Not Available")
-                    Image(systemName: "questionmark.circle")
-                }
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            }
-            .buttonStyle(.borderless)
-        }
-        .padding(.vertical, 2)
-    }
-    
-    private var rrWasIncluded: Bool {
-        (draft.rrIntervalCount ?? 0) > 0
-    }
-    
-    private var ecgWasIncluded: Bool {
-        (draft.ecgSampleCount ?? 0) > 0
     }
     
     private var actionSection: some View {

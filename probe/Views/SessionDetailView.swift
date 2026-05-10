@@ -8,13 +8,22 @@ struct SessionDetailView: View {
 
     @State private var hrSamples: ContiguousArray<SessionManager.HeartRateSample> = []
     @State private var laps: [SavedSession.LapRecord] = []
+    @State private var visibleLapLimit: Int = 4
+    @State private var isRecordedDataExpanded = false
+
+    private static let initialVisibleLaps = 4
+    private static let lapLoadMoreBatch = 8
 
     private var accentColor: Color {
         ActivityColor(rawValue: session.colorName)?.color ?? .blue
     }
 
-    private var sportIcon: String {
-        Sport(rawValue: session.sport)?.icon ?? "heart.fill"
+    private var displayedLaps: [SavedSession.LapRecord] {
+        Array(laps.prefix(visibleLapLimit))
+    }
+
+    private var hiddenLapCount: Int {
+        max(0, laps.count - visibleLapLimit)
     }
 
     // MARK: Body
@@ -51,11 +60,11 @@ struct SessionDetailView: View {
         .navigationTitle(session.title)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            let decoded = session.decodedHRSamples()
-            hrSamples = ContiguousArray(decoded.map {
-                SessionManager.HeartRateSample(elapsedTime: $0.elapsed, bpm: $0.bpm)
-            })
-            laps = session.decodedLaps()
+            loadSessionData()
+        }
+        .onChange(of: session.id) { _, _ in
+            isRecordedDataExpanded = false
+            loadSessionData()
         }
     }
 
@@ -75,7 +84,7 @@ struct SessionDetailView: View {
                     Circle()
                         .fill(.white.opacity(0.22))
                         .frame(width: 72, height: 72)
-                    Image(systemName: sportIcon)
+                    Image(systemName: session.sessionDisplayIconSystemName)
                         .font(.system(size: 32, weight: .semibold))
                         .foregroundStyle(.white)
                 }
@@ -103,7 +112,7 @@ struct SessionDetailView: View {
         sectionCard {
             VStack(spacing: 16) {
                 VStack(spacing: 4) {
-                    label("Session Time", icon: "timer", color: accentColor)
+                    label("Session Time", icon: "timer", color: .secondary)
                     Text(formattedDuration(session.durationSeconds))
                         .font(.system(size: 64, weight: .semibold, design: .rounded))
                         .monospacedDigit()
@@ -265,51 +274,16 @@ struct SessionDetailView: View {
 
     private var recordedDataCard: some View {
         sectionCard {
-            VStack(alignment: .leading, spacing: 12) {
-                label("Recorded Data", icon: "heart.text.square", color: accentColor)
-
-                VStack(spacing: 0) {
-                    recordedDataRow(title: "Heart Rate", icon: "heart.fill", color: .red)
-                    if session.hasRRIntervals {
-                        Divider().padding(.leading, 32)
-                        recordedDataRow(title: "RR Intervals", icon: "waveform.path.ecg", color: .pink)
-                    }
-                    if session.hasEcg {
-                        Divider().padding(.leading, 32)
-                        recordedDataRow(
-                            title: "ECG",
-                            icon: "bolt.heart.fill",
-                            color: .blue,
-                            detail: compactEcgCount(session.ecgSampleCount) + " samples"
-                        )
-                    }
-                }
-            }
+            RecordedDataDisclosureBlock(
+                isExpanded: $isRecordedDataExpanded,
+                showLocationRoute: false,
+                rrIntervalsRecorded: session.hasRRIntervals,
+                ecgRecorded: session.hasEcg,
+                showMissingSensorRows: false,
+                onUnsupportedMetric: nil,
+                presentation: .groupedCard
+            )
         }
-    }
-
-    private func recordedDataRow(title: String, icon: String, color: Color, detail: String? = nil) -> some View {
-        HStack {
-            Label {
-                Text(title)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-            } icon: {
-                Image(systemName: icon)
-                    .foregroundStyle(color)
-            }
-            Spacer()
-            if let detail {
-                Text(detail)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-            } else {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.subheadline)
-            }
-        }
-        .padding(.vertical, 8)
     }
 
     private func rpeCard(rpe: Int) -> some View {
@@ -400,11 +374,15 @@ struct SessionDetailView: View {
                     .foregroundStyle(.secondary)
                     .padding(.bottom, 8)
 
-                    ForEach(laps, id: \.number) { lap in
+                    ForEach(Array(displayedLaps.enumerated()), id: \.element.number) { index, lap in
                         lapRow(lap)
-                        if lap.number < laps.count {
+                        if index < displayedLaps.count - 1 {
                             Divider()
                         }
+                    }
+
+                    if hiddenLapCount > 0 {
+                        loadMoreLapsControl
                     }
                 }
             }
@@ -415,7 +393,7 @@ struct SessionDetailView: View {
         HStack {
             Text("\(lap.number)")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(accentColor)
+                .foregroundStyle(.primary)
                 .frame(width: 28, alignment: .leading)
 
             Text(formattedDuration(lap.duration))
@@ -437,6 +415,50 @@ struct SessionDetailView: View {
             }
         }
         .padding(.vertical, 8)
+    }
+
+    private var loadMoreLapsControl: some View {
+        Button(action: loadMoreLaps) {
+            HStack(spacing: 6) {
+                Text("Show more")
+                    .font(.footnote.weight(.semibold))
+                Text("·")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.tertiary)
+                Text(
+                    nextLapBatchCount < hiddenLapCount
+                        ? "\(nextLapBatchCount) of \(hiddenLapCount) laps"
+                        : "\(hiddenLapCount) lap\(hiddenLapCount == 1 ? "" : "s")"
+                )
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.tertiary)
+            }
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 6)
+            .padding(.bottom, 2)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var nextLapBatchCount: Int {
+        min(Self.lapLoadMoreBatch, hiddenLapCount)
+    }
+
+    private func loadMoreLaps() {
+        guard hiddenLapCount > 0 else { return }
+        withAnimation(.easeOut(duration: 0.2)) {
+            visibleLapLimit = min(visibleLapLimit + Self.lapLoadMoreBatch, laps.count)
+        }
+    }
+
+    private func loadSessionData() {
+        let decoded = session.decodedHRSamples()
+        hrSamples = ContiguousArray(decoded.map {
+            SessionManager.HeartRateSample(elapsedTime: $0.elapsed, bpm: $0.bpm)
+        })
+        laps = session.decodedLaps()
+        visibleLapLimit = min(Self.initialVisibleLaps, laps.count)
     }
 
     // MARK: Notes card
@@ -523,15 +545,6 @@ struct SessionDetailView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMM d · HH:mm"
         return formatter.string(from: date)
-    }
-
-    private func compactEcgCount(_ count: Int) -> String {
-        if count >= 1_000_000 {
-            return String(format: "%.1fM", Double(count) / 1_000_000)
-        } else if count >= 1_000 {
-            return String(format: "%.0fK", Double(count) / 1_000)
-        }
-        return "\(count)"
     }
 
     private func rpeColor(_ rpe: Int) -> Color {
