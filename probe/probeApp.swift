@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct probeApp: App {
@@ -14,6 +15,7 @@ struct probeApp: App {
                 .environment(sessionManager)
                 .preferredColorScheme(colorScheme)
         }
+        .modelContainer(for: SavedSession.self)
     }
     
     private var colorScheme: ColorScheme? {
