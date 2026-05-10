@@ -1,9 +1,11 @@
 import SwiftUI
+import SwiftData
 
 struct CaptureView: View {
     @Environment(SensorManager.self) private var sensorManager
     @Environment(SessionManager.self) private var sessionManager
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.modelContext) private var modelContext
 
     @Binding var selectedTab: Int
 
@@ -47,15 +49,15 @@ struct CaptureView: View {
                 ActivitySaveView(
                     draft: draft,
                     onSave: { metadata in
+                        // Flush ECG to disk before session state is cleared.
+                        sensorManager.finalizeEcgRecording()
                         sensorManager.stopEcgStreaming()
+                        persistSession(draft: draft, metadata: metadata)
                         sessionManager.stopSession()
                         pendingSaveDraft = nil
-
-                        print("Saved note:", metadata.note)
-                        print("Saved RPE:", metadata.rpe as Any)
-                        print("Saved color:", metadata.color.rawValue)
                     },
                     onDiscard: {
+                        sensorManager.discardEcgRecording()
                         sensorManager.stopEcgStreaming()
                         sessionManager.stopSession()
                         pendingSaveDraft = nil
@@ -262,9 +264,6 @@ struct CaptureView: View {
             .onAppear {
                 syncEcgStreaming()
             }
-            .onDisappear {
-                sensorManager.stopEcgStreaming()
-            }
             .onChange(of: activePage) { _, _ in
                 syncEcgStreaming()
             }
@@ -284,10 +283,10 @@ struct CaptureView: View {
     }
 
     private func syncEcgStreaming() {
-        if activePage == 4 && sessionManager.state != .idle && sensorManager.isEcgAvailable {
+        if sessionManager.state != .idle && sensorManager.isEcgAvailable {
             sensorManager.startEcgStreaming()
         } else {
-            sensorManager.stopEcgStreaming()
+            sensorManager.stopEcgStreaming(clearSamples: false)
         }
     }
 
@@ -329,20 +328,6 @@ struct CaptureView: View {
                 )
 
                 connectionQualityCard(quality)
-
-                metricCard(
-                    title: "RSSI",
-                    value: quality.rssiText,
-                    icon: "dot.radiowaves.left.and.right",
-                    iconColor: .blue
-                )
-
-                metricCard(
-                    title: "Packet Loss",
-                    value: quality.packetLossText,
-                    icon: "arrow.down.forward.and.arrow.up.backward",
-                    iconColor: .orange
-                )
             }
 
             if gpsIsRecording {
@@ -473,7 +458,10 @@ struct CaptureView: View {
             horizontalPadding: 0,
             centerContent: false
         ) {
-            EcgGraphPanel(samples: sensorManager.ecgSamples)
+            EcgGraphPanel(
+                samples: sensorManager.ecgSamples,
+                streamState: sensorManager.ecgStreamState
+            )
                 .frame(maxWidth: .infinity)
                 .frame(maxHeight: .infinity)
                 .background(Color(.secondarySystemGroupedBackground))
@@ -492,11 +480,53 @@ struct CaptureView: View {
             distanceText: formattedDistanceSummary(sessionManager.distanceMeters),
             gpsWasEnabled: isGPSEnabled && selectedSport.useLocation,
             rrIntervalCount: nil,
-            ecgSampleCount: sensorManager.ecgSamples.isEmpty ? nil : sensorManager.ecgSamples.count,
+            ecgSampleCount: sensorManager.ecgRecordedSampleCount > 0 ? sensorManager.ecgRecordedSampleCount : nil,
             ecgWasAvailable: sensorManager.isEcgAvailable,
-            startedAt: nil,
+            startedAt: sessionManager.sessionStartedAt,
             endedAt: Date()
         )
+    }
+
+    // MARK: Persistence
+
+    private func persistSession(draft: ActivitySaveDraft, metadata: ActivitySaveMetadata) {
+        let endedAt = draft.endedAt
+        let startedAt = draft.startedAt ?? endedAt
+
+        let hrData = SavedSession.encodeHRSamples(sessionManager.heartRateSamples)
+        let lapsData = SavedSession.encodeLaps(sessionManager.lapMetrics)
+
+        // Use the session UUID so it matches the ECG file directory on disk.
+        let sessionId = sessionManager.currentSessionId ?? UUID()
+        let hasEcg = (draft.ecgSampleCount ?? 0) > 0
+
+        let saved = SavedSession(
+            id: sessionId,
+            sport: draft.sport.rawValue,
+            title: metadata.customTitle ?? draft.sport.rawValue,
+            colorName: metadata.color.rawValue,
+            note: metadata.note,
+            rpe: metadata.rpe,
+            startedAt: startedAt,
+            endedAt: endedAt,
+            durationSeconds: endedAt.timeIntervalSince(startedAt),
+            averageBpm: sessionManager.averageBpm,
+            maxBpm: sessionManager.maxBpm,
+            lapCount: sessionManager.laps.count,
+            distanceMeters: sessionManager.distanceMeters,
+            hasEcg: hasEcg,
+            ecgSampleCount: draft.ecgSampleCount ?? 0,
+            hrSamplesData: hrData,
+            lapsData: lapsData
+        )
+
+        modelContext.insert(saved)
+
+        do {
+            try modelContext.save()
+        } catch {
+            print("Failed to save session: \(error)")
+        }
     }
 
     // MARK: Active Controls

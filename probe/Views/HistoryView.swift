@@ -1,95 +1,183 @@
 import SwiftUI
-
-struct HistoryActivity: Identifiable {
-    let id = UUID()
-    let title: String
-    let date: String
-    let duration: String
-    let avgBpm: Int
-    let rpe: Int
-    let icon: String
-    let color: Color
-}
+import SwiftData
 
 struct HistoryView: View {
-    @State private var recentActivities = [
-        HistoryActivity(title: "Norwegian 4x4", date: "Apr 28 • 17:30", duration: "48:12", avgBpm: 168, rpe: 9, icon: "heart.circle.fill", color: .red),
-        HistoryActivity(title: "Zone 2 Base", date: "Apr 25 • 08:15", duration: "1:15:00", avgBpm: 132, rpe: 4, icon: "figure.run", color: .blue),
-        HistoryActivity(title: "Recovery Spin", date: "Apr 22 • 09:00", duration: "45:00", avgBpm: 115, rpe: 2, icon: "figure.indoor.cycle", color: .green)
-    ]
-    
-    @State private var olderActivities = [
-        HistoryActivity(title: "Threshold Intervals", date: "Mar 28 • 18:00", duration: "55:30", avgBpm: 172, rpe: 8, icon: "bolt.fill", color: .orange),
-        HistoryActivity(title: "Long Run", date: "Mar 24 • 07:00", duration: "2:10:15", avgBpm: 145, rpe: 7, icon: "figure.run", color: .blue)
-    ]
+    @Query(sort: \SavedSession.startedAt, order: .reverse)
+    private var sessions: [SavedSession]
+
+    @Environment(\.modelContext) private var modelContext
 
     var body: some View {
         NavigationStack {
-            List {
-                if !recentActivities.isEmpty {
-                    Section("April 2026") {
-                        ForEach(recentActivities) { activity in
-                            activityRow(for: activity)
-                        }
-                        .onDelete { indexSet in
-                            recentActivities.remove(atOffsets: indexSet)
-                        }
-                    }
-                }
-                
-                if !olderActivities.isEmpty {
-                    Section("March 2026") {
-                        ForEach(olderActivities) { activity in
-                            activityRow(for: activity)
-                        }
-                        .onDelete { indexSet in
-                            olderActivities.remove(atOffsets: indexSet)
-                        }
-                    }
+            Group {
+                if sessions.isEmpty {
+                    emptyState
+                } else {
+                    sessionList
                 }
             }
-            .listStyle(.insetGrouped)
             .navigationTitle("My Recordings")
             .contentMargins(.top, 16, for: .scrollContent)
             .contentMargins(.bottom, 24, for: .scrollContent)
         }
     }
-    
-    private func activityRow(for activity: HistoryActivity) -> some View {
-        NavigationLink(destination: Text("Activity Overview: \(activity.title)")) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 16) {
-                    ZStack {
-                        Circle()
-                            .fill(activity.color.gradient)
-                            .frame(width: 44, height: 44)
-                        
-                        Image(systemName: activity.icon)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
+
+    // MARK: Session list
+
+    private var sessionList: some View {
+        List {
+            ForEach(groupedByMonth, id: \.month) { group in
+                Section(group.month) {
+                    ForEach(group.sessions) { session in
+                        NavigationLink(destination: SessionDetailView(session: session)) {
+                            sessionRow(for: session)
+                        }
                     }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(activity.title)
-                            .font(.headline.weight(.bold))
-                            .foregroundColor(.primary)
-                        
-                        Text(activity.date)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundColor(.secondary)
+                    .onDelete { indexSet in
+                        deleteSessions(group.sessions, at: indexSet)
                     }
-                }
-                
-                HStack(spacing: 8) {
-                    metricPill(icon: "timer", text: activity.duration)
-                    metricPill(icon: "heart.fill", text: "\(activity.avgBpm) BPM")
-                    metricPill(icon: "chart.bar.fill", text: "RPE \(activity.rpe)")
                 }
             }
-            .padding(.vertical, 6)
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    // MARK: Empty state
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "figure.run.circle")
+                .font(.system(size: 56, weight: .light))
+                .foregroundStyle(.tertiary)
+
+            VStack(spacing: 6) {
+                Text("No Recordings Yet")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text("Complete a session to see it here.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: Row
+
+    private func sessionRow(for session: SavedSession) -> some View {
+        let color = ActivityColor(rawValue: session.colorName)?.color ?? .blue
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(color.gradient)
+                        .frame(width: 44, height: 44)
+
+                    Image(systemName: Sport(rawValue: session.sport)?.icon ?? "heart.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(session.title)
+                        .font(.headline.weight(.bold))
+                        .foregroundColor(.primary)
+
+                    Text(formattedDate(session.startedAt))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            HStack(spacing: 8) {
+                metricPill(icon: "timer", text: formattedDuration(session.durationSeconds))
+
+                if let avg = session.averageBpm {
+                    metricPill(icon: "heart.fill", text: "\(avg) BPM")
+                }
+
+                if let rpe = session.rpe {
+                    metricPill(icon: "gauge", text: "RPE \(rpe)")
+                }
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    // MARK: Grouping
+
+    private struct MonthGroup: Identifiable {
+        let month: String
+        let sessions: [SavedSession]
+        var id: String { month }
+    }
+
+    private var groupedByMonth: [MonthGroup] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+
+        var groups: [String: [SavedSession]] = [:]
+        var order: [String] = []
+
+        for session in sessions {
+            let key = formatter.string(from: session.startedAt)
+            if groups[key] == nil {
+                order.append(key)
+            }
+            groups[key, default: []].append(session)
+        }
+
+        return order.compactMap { key in
+            guard let list = groups[key] else { return nil }
+            return MonthGroup(month: key, sessions: list)
         }
     }
-    
+
+    // MARK: Delete
+
+    private func deleteSessions(_ list: [SavedSession], at offsets: IndexSet) {
+        for index in offsets {
+            let session = list[index]
+            // Remove ECG file directory if present.
+            if let url = session.ecgFileURL {
+                try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+            }
+            modelContext.delete(session)
+        }
+    }
+
+    // MARK: Formatting
+
+    private func formattedDate(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+
+        if calendar.isDateInToday(date) {
+            return "Today • \(formatter.string(from: date))"
+        } else if calendar.isDateInYesterday(date) {
+            return "Yesterday • \(formatter.string(from: date))"
+        } else {
+            formatter.dateFormat = "MMM d • HH:mm"
+            return formatter.string(from: date)
+        }
+    }
+
+    private func formattedDuration(_ seconds: Double) -> String {
+        let total = max(0, Int(seconds.rounded()))
+        let h = total / 3600
+        let m = total / 60 % 60
+        let s = total % 60
+        if h > 0 {
+            return String(format: "%d:%02d:%02d", h, m, s)
+        }
+        return String(format: "%02d:%02d", m, s)
+    }
+
     private func metricPill(icon: String, text: String) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)

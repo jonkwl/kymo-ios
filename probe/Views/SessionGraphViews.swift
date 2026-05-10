@@ -2,8 +2,18 @@ import SwiftUI
 
 struct EcgGraphPanel: View {
     let samples: [Double]
+    let streamState: SensorManager.EcgStreamState
 
     @Environment(\.colorScheme) private var colorScheme
+    
+    private var shouldShowWaitingMessage: Bool {
+        switch streamState {
+        case .initializing, .unavailable:
+            return true
+        case .streaming, .stopped:
+            return false
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -12,7 +22,7 @@ struct EcgGraphPanel: View {
             GraphGridView()
                 .stroke(ecgStyle.grid, lineWidth: 0.6)
 
-            if samples.isEmpty {
+            if shouldShowWaitingMessage {
                 EcgLoadingMessage(style: ecgStyle)
             } else {
                 EcgGraphView(samples: samples, style: ecgStyle)
