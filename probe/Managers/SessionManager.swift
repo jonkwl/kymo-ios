@@ -38,6 +38,11 @@ class SessionManager {
     var distanceMeters: Double? = nil
     var currentPaceSecondsPerKilometer: TimeInterval? = nil
     var sensorManagerRef: SensorManager?
+
+    /// Unique identifier for the current recording session. Matches the ECG file directory name.
+    private(set) var currentSessionId: UUID? = nil
+    /// Wall-clock time when the current session was started (not paused/resumed adjusted).
+    private(set) var sessionStartedAt: Date? = nil
     
     private var timer: AnyCancellable?
     private var startTime: Date?
@@ -84,6 +89,10 @@ class SessionManager {
     func startSession(sport: Sport) {
         guard state == .idle else { return }
         resetSessionData(keepingCapacity: true)
+        let sessionId = UUID()
+        currentSessionId = sessionId
+        sessionStartedAt = Date()
+        sensorManagerRef?.prepareEcgRecordingForSession(sessionId: sessionId)
         state = .recording
         self.sport = sport
         startTime = Date()
@@ -119,13 +128,14 @@ class SessionManager {
     }
     
     func stopSession() {
-        sensorManagerRef?.stopEcgStreaming()
         timer?.cancel()
         state = .idle
         let liveActivity = activity
         activity = nil
         sport = nil
         startTime = nil
+        currentSessionId = nil
+        sessionStartedAt = nil
         resetSessionData(keepingCapacity: true)
         
         Task {
@@ -195,6 +205,8 @@ class SessionManager {
     private func resetSessionData(keepingCapacity: Bool) {
         accumulatedTime = 0
         elapsedTime = 0
+        currentSessionId = nil
+        sessionStartedAt = nil
         laps.removeAll(keepingCapacity: keepingCapacity)
         lapMetrics.removeAll(keepingCapacity: keepingCapacity)
         latestLapMetrics = nil
