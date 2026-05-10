@@ -7,6 +7,9 @@ struct HistoryView: View {
 
     @Environment(\.modelContext) private var modelContext
 
+    @State private var sessionsPendingDeletion: [SavedSession] = []
+    @State private var showDeleteConfirmation = false
+
     var body: some View {
         NavigationStack {
             Group {
@@ -19,7 +22,34 @@ struct HistoryView: View {
             .navigationTitle("My Recordings")
             .contentMargins(.top, 16, for: .scrollContent)
             .contentMargins(.bottom, 24, for: .scrollContent)
+            .alert(deletionAlertTitle, isPresented: $showDeleteConfirmation) {
+                Button("Cancel", role: .cancel) {
+                    sessionsPendingDeletion = []
+                }
+                Button("Delete", role: .destructive) {
+                    deleteConfirmedSessions()
+                }
+            } message: {
+                Text(deletionAlertMessage)
+            }
         }
+    }
+
+    private var deletionAlertTitle: String {
+        if sessionsPendingDeletion.count <= 1 {
+            return "Delete Recording?"
+        }
+        return "Delete \(sessionsPendingDeletion.count) Recordings?"
+    }
+
+    private var deletionAlertMessage: String {
+        if sessionsPendingDeletion.count == 1, let session = sessionsPendingDeletion.first {
+            return "“\(session.title)” will be permanently removed including any saved ECG data. You cannot undo this action."
+        }
+        if sessionsPendingDeletion.count > 1 {
+            return "These \(sessionsPendingDeletion.count) recordings will be permanently removed including any saved ECG data. You cannot undo this action."
+        }
+        return "This recording will be permanently removed. You cannot undo this action."
     }
 
     // MARK: Session list
@@ -34,7 +64,8 @@ struct HistoryView: View {
                         }
                     }
                     .onDelete { indexSet in
-                        deleteSessions(group.sessions, at: indexSet)
+                        sessionsPendingDeletion = indexSet.map { group.sessions[$0] }
+                        showDeleteConfirmation = true
                     }
                 }
             }
@@ -139,15 +170,14 @@ struct HistoryView: View {
 
     // MARK: Delete
 
-    private func deleteSessions(_ list: [SavedSession], at offsets: IndexSet) {
-        for index in offsets {
-            let session = list[index]
-            // Remove ECG file directory if present.
+    private func deleteConfirmedSessions() {
+        for session in sessionsPendingDeletion {
             if let url = session.ecgFileURL {
                 try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
             }
             modelContext.delete(session)
         }
+        sessionsPendingDeletion = []
     }
 
     // MARK: Formatting

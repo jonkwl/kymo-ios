@@ -30,6 +30,9 @@ struct SessionDetailView: View {
                     if !session.note.isEmpty {
                         notesCard
                     }
+                    if let rpe = session.rpe {
+                        rpeCard(rpe: rpe)
+                    }
                     if !hrSamples.isEmpty {
                         heartRateCard
                         zoneDistributionCard
@@ -37,6 +40,9 @@ struct SessionDetailView: View {
                     metricsGrid
                     if !laps.isEmpty {
                         lapsCard
+                    }
+                    if session.hasEcg {
+                        ecgSamplesCard
                     }
                 }
                 .padding(.horizontal, 16)
@@ -158,7 +164,8 @@ struct SessionDetailView: View {
 
                 HeartRateHistoryGraphView(
                     samples: hrSamples,
-                    lapTimestamps: laps.map(\.endTime)
+                    lapTimestamps: laps.map(\.endTime),
+                    maxHeartRateForZones: userMaxHR > 0 ? userMaxHR : 190
                 )
                 .frame(height: 180)
                 .padding(.bottom, 8)
@@ -241,13 +248,10 @@ struct SessionDetailView: View {
 
     // MARK: Metrics grid
 
+    @ViewBuilder
     private var metricsGrid: some View {
-        let columns = [GridItem(.flexible()), GridItem(.flexible())]
-        return LazyVGrid(columns: columns, spacing: 12) {
-            if let rpe = session.rpe {
-                rpeCard(rpe: rpe)
-            }
-            if let dist = session.distanceMeters {
+        if let dist = session.distanceMeters {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 metricTile(
                     title: "Distance",
                     value: String(format: "%.2f", dist / 1_000),
@@ -256,55 +260,48 @@ struct SessionDetailView: View {
                     color: .purple
                 )
             }
-            if session.hasEcg {
-                metricTile(
-                    title: "ECG Samples",
-                    value: compactEcgCount(session.ecgSampleCount),
-                    unit: nil,
-                    icon: "bolt.heart.fill",
-                    color: accentColor
-                )
-            }
         }
     }
 
+    /// Full-width metric card placed at the bottom of the session overview (after laps).
+    private var ecgSamplesCard: some View {
+        metricTile(
+            title: "ECG Samples",
+            value: compactEcgCount(session.ecgSampleCount),
+            unit: nil,
+            icon: "bolt.heart.fill",
+            color: accentColor
+        )
+    }
+
     private func rpeCard(rpe: Int) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "gauge")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.orange)
-                Text("Effort (RPE)")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
+        sectionCard {
+            VStack(alignment: .leading, spacing: 12) {
+                label("Effort (RPE)", icon: "gauge", color: .orange)
 
-            HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text("\(rpe)")
-                    .font(.system(size: 34, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .monospacedDigit()
-                Text("/ 10")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-            }
-
-            // Mini RPE bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color(.tertiarySystemFill))
-                    Capsule()
-                        .fill(rpeColor(rpe))
-                        .frame(width: geo.size.width * (CGFloat(rpe) / 10))
+                HStack(alignment: .lastTextBaseline, spacing: 4) {
+                    Text("\(rpe)")
+                        .font(.system(size: 40, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .monospacedDigit()
+                    Text("/ 10")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
                 }
+
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color(.tertiarySystemFill))
+                        Capsule()
+                            .fill(rpeColor(rpe))
+                            .frame(width: geo.size.width * (CGFloat(rpe) / 10))
+                    }
+                }
+                .frame(height: 6)
             }
-            .frame(height: 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, minHeight: 86, alignment: .leading)
-        .padding(16)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private func metricTile(title: String, value: String, unit: String?, icon: String, color: Color) -> some View {

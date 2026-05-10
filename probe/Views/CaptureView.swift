@@ -388,10 +388,11 @@ struct CaptureView: View {
     private var lapMetricsPage: some View {
         let hasLaps = !sessionManager.laps.isEmpty
         let lap = sessionManager.currentLapMetrics
+        let subtitleLapNumber = sessionManager.lapMetrics.count
 
         return carouselPage(
             title: "Current Lap",
-            subtitle: hasLaps ? "Lap \(lap.number)" : "No Lap Yet",
+            subtitle: hasLaps ? "Lap \(subtitleLapNumber)" : "No Lap Yet",
             icon: "flag.fill",
             tone: lapPageTone
         ) {
@@ -450,7 +451,10 @@ struct CaptureView: View {
         ) {
             HeartRateHistoryGraphView(
                 samples: sessionManager.heartRateSamples,
-                lapTimestamps: sessionManager.laps
+                lapTimestamps: sessionManager.laps,
+                currentBpm: sensorManager.currentBpm > 0 ? sensorManager.currentBpm : nil,
+                maxHeartRateForZones: userMaxHR > 0 ? userMaxHR : 190,
+                liveZoneStripeRendering: true
             )
             .frame(maxWidth: .infinity)
             .frame(maxHeight: .infinity)
@@ -469,7 +473,8 @@ struct CaptureView: View {
         ) {
             EcgGraphPanel(
                 samples: sensorManager.ecgSamples,
-                streamState: sensorManager.ecgStreamState
+                streamState: sensorManager.ecgStreamState,
+                currentBpm: sensorManager.currentBpm > 0 ? sensorManager.currentBpm : nil
             )
                 .frame(maxWidth: .infinity)
                 .frame(maxHeight: .infinity)

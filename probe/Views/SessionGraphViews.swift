@@ -3,6 +3,8 @@ import SwiftUI
 struct EcgGraphPanel: View {
     let samples: [Double]
     let streamState: SensorManager.EcgStreamState
+    /// Live BPM from the sensor (in-session only); shown bottom-trailing when > 0.
+    var currentBpm: Int? = nil
 
     @Environment(\.colorScheme) private var colorScheme
     
@@ -16,17 +18,24 @@ struct EcgGraphPanel: View {
     }
 
     var body: some View {
-        ZStack {
-            ecgStyle.background
+        ZStack(alignment: .bottomTrailing) {
+            ZStack {
+                ecgStyle.background
 
-            GraphGridView()
-                .stroke(ecgStyle.grid, lineWidth: 0.6)
+                GraphGridView()
+                    .stroke(ecgStyle.grid, lineWidth: 0.6)
 
-            if shouldShowWaitingMessage {
-                EcgLoadingMessage(style: ecgStyle)
-            } else {
-                EcgGraphView(samples: samples, style: ecgStyle)
-                    .padding(.vertical, 24)
+                if shouldShowWaitingMessage {
+                    EcgLoadingMessage(style: ecgStyle)
+                } else {
+                    EcgGraphView(samples: samples, style: ecgStyle)
+                        .padding(.vertical, 24)
+                }
+            }
+
+            if let bpm = currentBpm, bpm > 0 {
+                LiveSessionBpmBadge(bpm: bpm)
+                    .padding(10)
             }
         }
         .animation(.easeInOut(duration: 0.25), value: samples.isEmpty)
@@ -138,6 +147,12 @@ struct HeartRateHistoryGraphView: View {
     let samples: ContiguousArray<SessionManager.HeartRateSample>
     /// Elapsed-time positions (seconds) where a lap was completed. Drawn as vertical markers.
     var lapTimestamps: [TimeInterval] = []
+    /// Live BPM from the sensor (in-session only); shown bottom-trailing when > 0.
+    var currentBpm: Int? = nil
+    /// Used to map horizontal zone bands (% max HR). Ignored if ≤ 0 (falls back to 190).
+    var maxHeartRateForZones: Int = 190
+    /// Live recording graph: stripes span the full view width and use clearer zone colors in light mode.
+    var liveZoneStripeRendering: Bool = false
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -145,8 +160,22 @@ struct HeartRateHistoryGraphView: View {
     private let trailingPadding: CGFloat = 12
     private let verticalPadding: CGFloat = 18
 
+    /// Dark-mode stripe opacity for **live** recording (unchanged).
+    private let zoneStripeLiveDarkOpacity = 0.085
+    /// Dark-mode stripe opacity for **saved** session detail — slightly stronger than live.
+    private let zoneStripeSavedDarkOpacity = 0.115
+    /// Saved-session stripes in light mode — clearly visible.
+    private let zoneStripeSavedLightOpacity = 0.19
+    /// Live-session stripes in light mode (saturated base colors × this opacity).
+    private let zoneStripeLiveLightOpacity = 0.22
+
+    private var effectiveMaxHR: Int {
+        maxHeartRateForZones > 0 ? maxHeartRateForZones : 190
+    }
+
     var body: some View {
-        GeometryReader { geometry in
+        ZStack(alignment: .bottomTrailing) {
+            GeometryReader { geometry in
             let rect = geometry.frame(in: .local)
             let chartRect = CGRect(
                 x: rect.minX + axisWidth,
@@ -159,8 +188,17 @@ struct HeartRateHistoryGraphView: View {
             let range = bpmRange(for: sourcePoints)
             let ticks = axisTicks(for: range)
             let timeRange = timeRange(for: sourcePoints)
+            let stripeMinX = liveZoneStripeRendering ? rect.minX : chartRect.minX
+            let stripeWidth = liveZoneStripeRendering ? rect.width : chartRect.width
 
             ZStack {
+                zoneStripeFragments(
+                    chartRect: chartRect,
+                    stripeMinX: stripeMinX,
+                    stripeWidth: stripeWidth,
+                    visibleRange: range
+                )
+
                 GraphGridView()
                     .stroke(gridColor, lineWidth: 0.5)
 
@@ -197,7 +235,7 @@ struct HeartRateHistoryGraphView: View {
                     lapMarkerLines(in: chartRect, timeRange: timeRange)
                         .stroke(
                             Color.primary.opacity(colorScheme == .dark ? 0.30 : 0.22),
-                            style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                            style: StrokeStyle(lineWidth: 2, dash: [5, 5])
                         )
 
                     ForEach(Array(lapTimestamps.enumerated()), id: \.offset) { index, time in
@@ -220,6 +258,107 @@ struct HeartRateHistoryGraphView: View {
                 }
             }
         }
+
+            if let bpm = currentBpm, bpm > 0 {
+                LiveSessionBpmBadge(bpm: bpm)
+                    .padding(10)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func zoneStripeFragments(
+        chartRect: CGRect,
+        stripeMinX: CGFloat,
+        stripeWidth: CGFloat,
+        visibleRange: ClosedRange<Double>
+    ) -> some View {
+        let zones: [HeartRateZone] = [.zone1, .zone2, .zone3, .zone4, .zone5]
+        ForEach(zones, id: \.rawValue) { zone in
+            if let stripe = zoneStripeRect(
+                zone: zone,
+                chartRect: chartRect,
+                stripeMinX: stripeMinX,
+                stripeWidth: stripeWidth,
+                visibleRange: visibleRange
+            ) {
+                Rectangle()
+                    .fill(zoneStripeFill(for: zone))
+                    .frame(width: stripe.width, height: stripe.height)
+                    .position(x: stripe.midX, y: stripe.midY)
+            }
+        }
+    }
+
+    private func zoneStripeFill(for zone: HeartRateZone) -> Color {
+        zoneStripeBaseColor(for: zone).opacity(zoneStripeOpacity())
+    }
+
+    private func zoneStripeBaseColor(for zone: HeartRateZone) -> Color {
+        if liveZoneStripeRendering, colorScheme != .dark {
+            switch zone {
+            case .zone1: return Color(red: 0.48, green: 0.52, blue: 0.58)
+            case .zone2: return Color(red: 0.20, green: 0.42, blue: 0.92)
+            case .zone3: return Color(red: 0.12, green: 0.68, blue: 0.38)
+            case .zone4: return Color(red: 0.98, green: 0.48, blue: 0.06)
+            case .zone5: return Color(red: 0.92, green: 0.18, blue: 0.22)
+            case .none: return Color.gray
+            }
+        }
+        return zone.color
+    }
+
+    private func zoneStripeOpacity() -> Double {
+        switch colorScheme {
+        case .dark:
+            return liveZoneStripeRendering ? zoneStripeLiveDarkOpacity : zoneStripeSavedDarkOpacity
+        default:
+            return liveZoneStripeRendering ? zoneStripeLiveLightOpacity : zoneStripeSavedLightOpacity
+        }
+    }
+
+    /// BPM band for each zone matches `HeartRateZone.current` thresholds (% of max HR).
+    private func zoneStripeRect(
+        zone: HeartRateZone,
+        chartRect: CGRect,
+        stripeMinX: CGFloat,
+        stripeWidth: CGFloat,
+        visibleRange: ClosedRange<Double>
+    ) -> CGRect? {
+        let m = Double(effectiveMaxHR)
+        let zoneLow: Double
+        let zoneHigh: Double
+        switch zone {
+        case .zone1:
+            zoneLow = m * 0.5
+            zoneHigh = m * 0.6
+        case .zone2:
+            zoneLow = m * 0.6
+            zoneHigh = m * 0.7
+        case .zone3:
+            zoneLow = m * 0.7
+            zoneHigh = m * 0.8
+        case .zone4:
+            zoneLow = m * 0.8
+            zoneHigh = m * 0.9
+        case .zone5:
+            zoneLow = m * 0.9
+            zoneHigh = visibleRange.upperBound + 1
+        case .none:
+            return nil
+        }
+
+        let lo = max(zoneLow, visibleRange.lowerBound)
+        let hi = min(zoneHigh, visibleRange.upperBound)
+        guard hi > lo + 0.25 else { return nil }
+
+        let yAtHi = yPosition(for: hi, in: chartRect, range: visibleRange)
+        let yAtLo = yPosition(for: lo, in: chartRect, range: visibleRange)
+        let top = min(yAtHi, yAtLo)
+        let bottom = max(yAtHi, yAtLo)
+        guard bottom > top else { return nil }
+
+        return CGRect(x: stripeMinX, y: top, width: stripeWidth, height: bottom - top)
     }
 
     private func lapMarkerLines(in rect: CGRect, timeRange: ClosedRange<TimeInterval>) -> Path {
@@ -387,4 +526,23 @@ struct GraphGridView: Shape {
 private struct HeartRateGraphPoint {
     let elapsedTime: TimeInterval
     let bpm: Double
+}
+
+private struct LiveSessionBpmBadge: View {
+    let bpm: Int
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "heart.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.red)
+            Text("\(bpm)")
+                .font(.caption.weight(.bold))
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial, in: Capsule())
+    }
 }
