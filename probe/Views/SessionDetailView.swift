@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import UIKit
 
 struct SessionDetailView: View {
@@ -6,15 +7,16 @@ struct SessionDetailView: View {
 
     @AppStorage("userMaxHR") private var userMaxHR: Int = 190
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
 
     @State private var hrSamples: ContiguousArray<SessionManager.HeartRateSample> = []
     @State private var laps: [SavedSession.LapRecord] = []
     @State private var visibleLapLimit: Int = 4
     @State private var isRecordedDataExpanded = false
 
-    @State private var exportURL: URL?
-    @State private var isExporting = false
-    @State private var exportError: String?
+    @State private var showExportSheet = false
+    @State private var showDeleteConfirmation = false
 
     private static let initialVisibleLaps = 4
     private static let lapLoadMoreBatch = 8
@@ -56,6 +58,7 @@ struct SessionDetailView: View {
                         lapsCard
                     }
                     recordedDataCard
+                    bottomActionButtons
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 32)
@@ -69,17 +72,16 @@ struct SessionDetailView: View {
                 exportMenu
             }
         }
-        .sheet(item: $exportURL) { url in
-            ShareSheet(url: url)
-                .ignoresSafeArea()
+        .sheet(isPresented: $showExportSheet) {
+            ExportSessionSheet(session: session)
         }
-        .alert("Export Failed", isPresented: Binding(
-            get: { exportError != nil },
-            set: { if !$0 { exportError = nil } }
-        )) {
-            Button("OK", role: .cancel) { exportError = nil }
+        .alert("Delete Recording?", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                deleteSession()
+            }
         } message: {
-            Text(exportError ?? "")
+            Text(deleteConfirmationMessage)
         }
         .onAppear {
             loadSessionData()
@@ -94,56 +96,57 @@ struct SessionDetailView: View {
 
     private var exportMenu: some View {
         Button {
-            exportFIT()
+            showExportSheet = true
         } label: {
-            if isExporting {
-                ProgressView()
-                    .controlSize(.small)
-            } else {
-                Image(systemName: "square.and.arrow.up")
-            }
+            Image(systemName: "square.and.arrow.up")
         }
-        .disabled(isExporting)
     }
 
-    private func exportFIT() {
-        guard !isExporting else { return }
-        isExporting = true
+    // MARK: Bottom action buttons
 
-        let capturedSession = session
-
-        Task.detached(priority: .userInitiated) {
-            do {
-                let data = try FITExporter.fitData(for: capturedSession)
-
-                // Filename: {session_name}_{session_date}.fit — all lowercase.
-                let dateFormatter = DateFormatter()
-                dateFormatter.dateFormat = "yyyy-MM-dd"
-                dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-                let sessionDate = dateFormatter.string(from: capturedSession.startedAt)
-
-                let sessionName = capturedSession.title
-                    .lowercased()
-                    .components(separatedBy: CharacterSet.alphanumerics.inverted)
-                    .filter { !$0.isEmpty }
-                    .joined(separator: "_")
-
-                let fileName = "\(sessionName)_\(sessionDate).fit"
-                let tmp = FileManager.default.temporaryDirectory
-                    .appendingPathComponent(fileName)
-                try data.write(to: tmp, options: .atomic)
-
-                await MainActor.run {
-                    isExporting = false
-                    exportURL = tmp
-                }
-            } catch {
-                await MainActor.run {
-                    isExporting = false
-                    exportError = error.localizedDescription
-                }
+    private var bottomActionButtons: some View {
+        VStack(spacing: 12) {
+            Button {
+                showExportSheet = true
+            } label: {
+                Label("Export Session", systemImage: "square.and.arrow.up")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(accentColor)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
+            .buttonStyle(.plain)
+
+            Button {
+                showDeleteConfirmation = true
+            } label: {
+                Label("Delete Session", systemImage: "trash")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .foregroundStyle(.red)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
         }
+        .padding(.top, 4)
+    }
+
+    // MARK: Delete
+
+    private var deleteConfirmationMessage: String {
+        "\"\(session.title)\" will be permanently removed including any saved ECG data. You cannot undo this action."
+    }
+
+    private func deleteSession() {
+        if let url = session.ecgFileURL {
+            try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+        }
+        modelContext.delete(session)
+        dismiss()
     }
 
     // MARK: Hero header
@@ -630,6 +633,149 @@ struct SessionDetailView: View {
         case 1...3: return .green
         case 4...6: return .orange
         default:    return .red
+        }
+    }
+}
+
+// MARK: - Export Session Sheet
+
+struct ExportSessionSheet: View {
+    let session: SavedSession
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var fitExportURL: URL?
+    @State private var isExportingFIT = false
+    @State private var fitExportError: String?
+    @State private var fitExportTask: Task<Void, Never>?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    fitExportRow
+                } footer: {
+                    Text("Additional export formats coming soon.")
+                        .font(.footnote)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("Export Session")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .disabled(isExportingFIT)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .sheet(item: $fitExportURL) { url in
+            ShareSheet(url: url)
+                .ignoresSafeArea()
+        }
+        .alert("Export Failed", isPresented: Binding(
+            get: { fitExportError != nil },
+            set: { if !$0 { fitExportError = nil } }
+        )) {
+            Button("OK", role: .cancel) { fitExportError = nil }
+        } message: {
+            Text(fitExportError ?? "")
+        }
+    }
+
+    private var fitExportRow: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.blue)
+                    .frame(width: 36, height: 36)
+                Image(systemName: "doc.badge.arrow.up")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Export FIT")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(isExportingFIT ? .secondary : .primary)
+                Text(".fit File")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if isExportingFIT {
+                HStack(spacing: 12) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Button("Cancel") {
+                        fitExportTask?.cancel()
+                        fitExportTask = nil
+                        isExportingFIT = false
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.red)
+                    .buttonStyle(.plain)
+                }
+            } else {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard !isExportingFIT else { return }
+            startFITExport()
+        }
+    }
+
+    private func startFITExport() {
+        isExportingFIT = true
+        let capturedSession = session
+
+        fitExportTask = Task(priority: .userInitiated) {
+            do {
+                let data = try FITExporter.fitData(for: capturedSession)
+
+                try Task.checkCancellation()
+
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd"
+                dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                let sessionDate = dateFormatter.string(from: capturedSession.startedAt)
+
+                let sessionName = capturedSession.title
+                    .lowercased()
+                    .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                    .filter { !$0.isEmpty }
+                    .joined(separator: "_")
+
+                let fileName = "\(sessionName)_\(sessionDate).fit"
+                let tmp = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(fileName)
+                try data.write(to: tmp, options: .atomic)
+
+                await MainActor.run {
+                    isExportingFIT = false
+                    fitExportURL = tmp
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    isExportingFIT = false
+                }
+            } catch {
+                await MainActor.run {
+                    isExportingFIT = false
+                    fitExportError = error.localizedDescription
+                }
+            }
         }
     }
 }
