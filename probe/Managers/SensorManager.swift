@@ -113,8 +113,8 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
     var ecgRecordedSampleCount: Int = 0
     var ecgStreamState: EcgStreamState = .unavailable
 
-    /// Total RR intervals received during the current recording session.
     var rrIntervalRecordedCount: Int = 0
+    private(set) var collectedRRIntervals: [UInt16] = []
     private var ecgDisposable: Disposable?
     private(set) var ecgFileWriter: EcgFileWriter?
     
@@ -405,6 +405,7 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
     func prepareEcgRecordingForSession(sessionId: UUID) {
         ecgRecordedSampleCount = 0
         rrIntervalRecordedCount = 0
+        collectedRRIntervals.removeAll(keepingCapacity: true)
         ecgSamples.removeAll(keepingCapacity: true)
         ecgStreamState = isEcgAvailable ? .initializing : .unavailable
         ecgFileWriter = EcgFileWriter(sessionId: sessionId)
@@ -514,6 +515,7 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
 
         if sample.rrAvailable && !sample.rrsMs.isEmpty {
             rrIntervalRecordedCount += sample.rrsMs.count
+            collectedRRIntervals.append(contentsOf: sample.rrsMs.map { UInt16(clamping: $0) })
         }
         
         let hasPpgQuality = sample.ppgQuality > 0
@@ -611,6 +613,7 @@ class SensorManager: PolarBleApiObserver, PolarBleApiPowerStateObserver, PolarBl
         ecgStreamState = .unavailable
         ecgRecordedSampleCount = 0
         rrIntervalRecordedCount = 0
+        collectedRRIntervals.removeAll()
         ecgSamples.removeAll(keepingCapacity: true)
         ecgFileWriter?.close()
         ecgFileWriter = nil

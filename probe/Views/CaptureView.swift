@@ -509,6 +509,7 @@ struct CaptureView: View {
 
         let hrData = SavedSession.encodeHRSamples(sessionManager.heartRateSamples)
         let lapsData = SavedSession.encodeLaps(sessionManager.lapMetrics)
+        let rrData = SavedSession.encodeRRIntervals(sensorManager.collectedRRIntervals)
 
         // Use the session UUID so it matches the ECG file directory on disk.
         let sessionId = sessionManager.currentSessionId ?? UUID()
@@ -532,6 +533,7 @@ struct CaptureView: View {
             distanceMeters: sessionManager.distanceMeters,
             hasRRIntervals: hasRRIntervals,
             rrIntervalCount: draft.rrIntervalCount ?? 0,
+            rrIntervalsData: rrData,
             hasEcg: hasEcg,
             ecgSampleCount: draft.ecgSampleCount ?? 0,
             hrSamplesData: hrData,

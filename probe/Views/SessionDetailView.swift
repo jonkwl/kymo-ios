@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SessionDetailView: View {
     let session: SavedSession
@@ -10,6 +11,10 @@ struct SessionDetailView: View {
     @State private var laps: [SavedSession.LapRecord] = []
     @State private var visibleLapLimit: Int = 4
     @State private var isRecordedDataExpanded = false
+
+    @State private var exportURL: URL?
+    @State private var isExporting = false
+    @State private var exportError: String?
 
     private static let initialVisibleLaps = 4
     private static let lapLoadMoreBatch = 8
@@ -59,12 +64,85 @@ struct SessionDetailView: View {
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle(session.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                exportMenu
+            }
+        }
+        .sheet(item: $exportURL) { url in
+            ShareSheet(url: url)
+                .ignoresSafeArea()
+        }
+        .alert("Export Failed", isPresented: Binding(
+            get: { exportError != nil },
+            set: { if !$0 { exportError = nil } }
+        )) {
+            Button("OK", role: .cancel) { exportError = nil }
+        } message: {
+            Text(exportError ?? "")
+        }
         .onAppear {
             loadSessionData()
         }
         .onChange(of: session.id) { _, _ in
             isRecordedDataExpanded = false
             loadSessionData()
+        }
+    }
+
+    // MARK: Export menu
+
+    private var exportMenu: some View {
+        Button {
+            exportFIT()
+        } label: {
+            if isExporting {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: "square.and.arrow.up")
+            }
+        }
+        .disabled(isExporting)
+    }
+
+    private func exportFIT() {
+        guard !isExporting else { return }
+        isExporting = true
+
+        let capturedSession = session
+
+        Task.detached(priority: .userInitiated) {
+            do {
+                let data = try FITExporter.fitData(for: capturedSession)
+
+                // Filename: {session_name}_{session_date}.fit — all lowercase.
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd"
+                dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+                let sessionDate = dateFormatter.string(from: capturedSession.startedAt)
+
+                let sessionName = capturedSession.title
+                    .lowercased()
+                    .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                    .filter { !$0.isEmpty }
+                    .joined(separator: "_")
+
+                let fileName = "\(sessionName)_\(sessionDate).fit"
+                let tmp = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(fileName)
+                try data.write(to: tmp, options: .atomic)
+
+                await MainActor.run {
+                    isExporting = false
+                    exportURL = tmp
+                }
+            } catch {
+                await MainActor.run {
+                    isExporting = false
+                    exportError = error.localizedDescription
+                }
+            }
         }
     }
 
@@ -554,4 +632,22 @@ struct SessionDetailView: View {
         default:    return .red
         }
     }
+}
+
+// MARK: - URL: Identifiable for sheet(item:)
+
+extension URL: @retroactive Identifiable {
+    public var id: String { absoluteString }
+}
+
+// MARK: - Share sheet bridge
+
+private struct ShareSheet: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

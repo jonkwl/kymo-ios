@@ -39,9 +39,7 @@ class SessionManager {
     var currentPaceSecondsPerKilometer: TimeInterval? = nil
     var sensorManagerRef: SensorManager?
 
-    /// Unique identifier for the current recording session. Matches the ECG file directory name.
     private(set) var currentSessionId: UUID? = nil
-    /// Wall-clock time when the current session was started (not paused/resumed adjusted).
     private(set) var sessionStartedAt: Date? = nil
     
     private var timer: AnyCancellable?

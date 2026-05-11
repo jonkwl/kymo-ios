@@ -21,6 +21,8 @@ final class SavedSession {
     var hasRRIntervals: Bool = false
     // Total number of RR intervals received during the session.
     var rrIntervalCount: Int = 0
+    // Packed UInt16 little-endian RR intervals in milliseconds.
+    var rrIntervalsData: Data = Data()
 
     // Whether a valid ECG file exists for this session.
     var hasEcg: Bool = false
@@ -49,6 +51,7 @@ final class SavedSession {
         distanceMeters: Double?,
         hasRRIntervals: Bool,
         rrIntervalCount: Int,
+        rrIntervalsData: Data,
         hasEcg: Bool,
         ecgSampleCount: Int,
         hrSamplesData: Data,
@@ -69,6 +72,7 @@ final class SavedSession {
         self.distanceMeters = distanceMeters
         self.hasRRIntervals = hasRRIntervals
         self.rrIntervalCount = rrIntervalCount
+        self.rrIntervalsData = rrIntervalsData
         self.hasEcg = hasEcg
         self.ecgSampleCount = ecgSampleCount
         self.hrSamplesData = hrSamplesData
@@ -153,6 +157,30 @@ extension SavedSession {
 
     func decodedLaps() -> [LapRecord] {
         (try? JSONDecoder().decode([LapRecord].self, from: lapsData)) ?? []
+    }
+
+    // Encodes RR intervals as a compact binary blob: one UInt16 per interval, little-endian.
+    static func encodeRRIntervals(_ values: [UInt16]) -> Data {
+        var data = Data(capacity: values.count * 2)
+        for var v in values {
+            withUnsafeBytes(of: &v) { data.append(contentsOf: $0) }
+        }
+        return data
+    }
+
+    func decodedRRIntervals() -> [UInt16] {
+        let stride = 2
+        guard rrIntervalsData.count % stride == 0 else { return [] }
+        var result = [UInt16]()
+        result.reserveCapacity(rrIntervalsData.count / stride)
+        rrIntervalsData.withUnsafeBytes { ptr in
+            var offset = 0
+            while offset + stride <= rrIntervalsData.count {
+                result.append(ptr.loadUnaligned(fromByteOffset: offset, as: UInt16.self))
+                offset += stride
+            }
+        }
+        return result
     }
 
     // MARK: Display
