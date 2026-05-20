@@ -27,7 +27,31 @@ struct FITExporter {
         let endTimestamp   = fitTimestamp(from: session.endedAt)
         let hrSamples      = session.decodedHRSamples()
         let rrValues       = session.decodedRRIntervals()
-        let laps           = session.decodedLaps()
+        var laps           = session.decodedLaps()
+        let sessionDuration = session.durationSeconds
+
+        // Satisfy FIT contiguous lap requirement up to session end
+        if laps.isEmpty {
+            laps.append(SavedSession.LapRecord(
+                number: 1,
+                startTime: 0,
+                endTime: sessionDuration,
+                duration: sessionDuration,
+                averageBpm: session.averageBpm,
+                averagePaceSecondsPerKilometer: nil,
+                distanceMeters: session.distanceMeters
+            ))
+        } else if let lastLap = laps.last, lastLap.endTime < sessionDuration {
+            laps.append(SavedSession.LapRecord(
+                number: lastLap.number + 1,
+                startTime: lastLap.endTime,
+                endTime: sessionDuration,
+                duration: sessionDuration - lastLap.endTime,
+                averageBpm: nil,
+                averagePaceSecondsPerKilometer: nil,
+                distanceMeters: nil
+            ))
+        }
 
         // ── file_id (global 0) ───────────────────────────────────────────────
         body.append(defMsg(localType: LocalType.fileId.rawValue, global: 0, fields: [
@@ -55,16 +79,20 @@ struct FITExporter {
             uint8(0),  // event_type = start
         ]))
 
-        // ── record × N (1 Hz HR) (global 20) ─────────────────────────────────
+        // ── record × N (1 Hz HR) (global 20)
         if !hrSamples.isEmpty {
             body.append(defMsg(localType: LocalType.record.rawValue, global: 20, fields: [
                 (253, 4, BaseType.uint32.rawValue), // timestamp
                 (3,   1, BaseType.uint8.rawValue),  // heart_rate
             ]))
+            var lastTs: UInt32 = 0
             for sample in hrSamples {
                 let ts = startTimestamp + UInt32(max(0, sample.elapsed))
-                let hr = sample.bpm.map { UInt8(clamping: $0) } ?? 0xFF
-                body.append(dataMsg(localType: LocalType.record.rawValue, values: [uint32(ts), uint8(hr)]))
+                if ts > lastTs {
+                    let hr = sample.bpm.map { UInt8(clamping: $0) } ?? 0xFF
+                    body.append(dataMsg(localType: LocalType.record.rawValue, values: [uint32(ts), uint8(hr)]))
+                    lastTs = ts
+                }
             }
         }
 
@@ -123,6 +151,9 @@ struct FITExporter {
                 let dist: UInt32 = lap.distanceMeters.map { UInt32($0 * 100) } ?? 0xFFFFFFFF
                 let avgHR    = lap.averageBpm.map { UInt8(clamping: $0) } ?? 0xFF
                 
+                let isLastLap = (index == laps.count - 1)
+                let lapTrigger: UInt8 = isLastLap ? 7 : 0
+                
                 body.append(dataMsg(localType: LocalType.lap.rawValue, values: [
                     uint16(UInt16(index)), // message_index
                     uint32(lapEnd),
@@ -131,7 +162,7 @@ struct FITExporter {
                     uint32(elapsed),       // total_timer_time = total_elapsed_time
                     uint32(dist),
                     uint8(avgHR),
-                    uint8(0),              // lap_trigger = manual
+                    uint8(lapTrigger),     // lap_trigger: 7 = session_end, 0 = manual
                     uint8(9),              // event = lap
                     uint8(1),              // event_type = stop
                 ]))
