@@ -58,7 +58,6 @@ struct SessionDetailView: View {
                         lapsCard
                     }
                     recordedDataCard
-                    bottomActionButtons
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 32)
@@ -100,39 +99,6 @@ struct SessionDetailView: View {
         } label: {
             Image(systemName: "square.and.arrow.up")
         }
-    }
-
-    // MARK: Bottom action buttons
-
-    private var bottomActionButtons: some View {
-        VStack(spacing: 12) {
-            Button {
-                showExportSheet = true
-            } label: {
-                Label("Export Session", systemImage: "square.and.arrow.up")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(accentColor)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                showDeleteConfirmation = true
-            } label: {
-                Label("Delete Session", systemImage: "trash")
-                    .font(.body.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .foregroundStyle(.red)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.top, 4)
     }
 
     // MARK: Delete
